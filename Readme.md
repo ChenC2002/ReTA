@@ -12,7 +12,7 @@
    + Semantic channel (feature-only)
    + Structure channel (graph message passing)
    + Adaptive gating to fuse both views
-## Repository Structure
+## Structure
 ```text
 reta/
 ├── data/            # EHR preprocessing and datasets
@@ -28,8 +28,11 @@ reta/
 This project uses MIMIC-III and MIMIC-IV for evaluation.
 1. Obtain access to MIMIC-III / MIMIC-IV following the official procedures.
 2. Place the raw data under:
-data/raw/MIMICIII/data data/raw/MIMICIV
-3. Preprocess EHR data and construct visit graphs:
+```bash
+data/raw/MIMICIII/data
+data/raw/MIMICIV
+```
+4. Preprocess EHR data and construct visit graphs:
 ```bash
 python data/preprocess.py \
   --dataset mimic-iv \
