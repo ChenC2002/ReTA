@@ -83,4 +83,3 @@ class KnowledgePool:
 
     def get_template(self, template_id: int) -> KnowledgeTemplate:
         return self.templates[self.id_to_index[int(template_id)]]
-``
