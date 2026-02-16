@@ -26,13 +26,12 @@ reta/
 ## Running
 ### Step 1: Data Preparation
 This project uses MIMIC-III and MIMIC-IV for evaluation.
-1. Obtain access to MIMIC-III / MIMIC-IV following the official procedures.
-2. Place the raw data under:
+1. Place the raw data under:
 ```bash
 data/raw/MIMICIII/data
 data/raw/MIMICIV
 ```
-4. Preprocess EHR data and construct visit graphs:
+2. Preprocess EHR data and construct visit graphs:
 ```bash
 python data/preprocess.py \
   --dataset mimic-iv \
