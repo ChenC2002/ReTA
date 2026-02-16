@@ -16,7 +16,7 @@
 ```text
 reta/
 ├── data/            # EHR preprocessing and datasets
-├── knowledge/       # Knowledge pool construction (offline)
+├── knowledge/       # Knowledge pool construction
 ├── model/           # Encoders and prediction heads
 ├── policy/          # RL policy, reward, PPO
 ├── train/           # Training pipelines (warm-up + RL)
