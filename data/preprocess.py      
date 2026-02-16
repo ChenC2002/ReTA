@@ -1,3 +1,23 @@
+"""
+- Patient trajectories are sequences of visits.
+- Each visit aggregates diagnosis codes within a 24-hour window.
+- Inputs are ICD codes; targets are CCS categories at the *next* visit.
+- Visit graphs contain ICD nodes plus CCS ancestors within <=h levels, with CCS hierarchy edges.
+
+The code is intentionally flexible about input schema so it can be adapted to MIMIC-III/IV exports
+or other EHR datasets.
+
+Expected input (CSV/Parquet) at the event level (one row per diagnosis event):
+- patient_id: patient identifier
+- timestamp: event timestamp (datetime or string)
+- icd_code: ICD-9/10 diagnosis code
+
+You can override column names via CLI flags.
+
+Outputs:
+- processed.pt: a torch-serialized dict with patient trajectories and metadata.
+"""
+
 from __future__ import annotations
 
 import argparse
