@@ -114,6 +114,7 @@ To verify the pipeline runs end-to-end without large datasets:
 + Run Knowledge Pool Construction to generate knowledge/templates.jsonl.
 + Run warm-up with a small processed dataset or a small subset of your data.
 + Run inference with --max_patients 10.
+
 This confirms your installation, imports, and module wiring.
 ## Disclaimer
 This code is for research purposes only and is not intended for clinical use.
