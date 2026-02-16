@@ -1,22 +1,22 @@
 # ReTA: Dynamic Topology Augmentation with Budget-Aware Knowledge Graph Injection for Healthcare Prediction
 ## Overview
 1. Refined Knowledge Pool (offline)
-   + LLM-distilled medical knowledge (Definition + Clinical Cascade)
-   + Grounded to biomedical KGs and clustered into reusable templates
++ LLM-distilled medical knowledge (Definition + Clinical Cascade)
++ Grounded to biomedical KGs and clustered into reusable templates
 2. Dynamic Augmentation Policy (online)
-   + RL policy selects one action per visit
-   + Action = (knowledge template, import mode)
-     + Soft Import: semantic feature injection (low cost)
-     + Hard Import: graph topology augmentation (high cost)
++ RL policy selects one action per visit
++ Action = (knowledge template, import mode)
+   + Soft Import: semantic feature injection (low cost)
+   + Hard Import: graph topology augmentation (high cost)
 3. Decoupled Multi-GAT Encoder
-   + Semantic channel (feature-only)
-   + Structure channel (graph message passing)
-   + Adaptive gating to fuse both views
++ Semantic channel (feature-only)
++ Structure channel (graph message passing)
++ Adaptive gating to fuse both views
 ## Structure
 ```text
 reta/
 ├── data/            # EHR preprocessing and datasets
-├── knowledge/       # Knowledge pool construction
+├── knowledge/       # Knowledge pool construction (offline)
 ├── model/           # Encoders and prediction heads
 ├── policy/          # RL policy, reward, PPO
 ├── train/           # Training pipelines (warm-up + RL)
@@ -24,29 +24,57 @@ reta/
 └── utils/           # Metrics, graph utilities, logging
 ```
 ## Running
-### Step 1: Data Preparation
-This project uses MIMIC-III and MIMIC-IV for evaluation.
-1. Place the raw data under:
+### Installation
 ```bash
-data/raw/MIMICIII/data
-data/raw/MIMICIV
+pip install -r requirements.txt
 ```
-2. Preprocess EHR data and construct visit graphs:
+### Step 1: Data Preparation
+This code expects a patient-level sequence of visits derived from an event-level diagnosis table (one row per diagnosis event). Visits are aggregated with a 24-hour window and duplicates removed.
+1. Prepare an event-level diagnosis file:
+Create data/raw/diagnoses.csv with at least:
++ patient_id
++ timestamp
++ icd_code (ICD-9/10 string)
+2. Prepare ICD→CCS mapping and CCS hierarchy:
+Create two CSV resources:
++ data/resources/icd_to_ccs.csv with columns: icd, ccs
++ data/resources/ccs_hierarchy.csv with columns: child, parent
+3. Run preprocessing
+This produces data/processed/processed.pt containing trajectories and per-visit graphs.
 ```bash
-python data/preprocess.py \
-  --dataset mimic-iv \
-  --output_dir data/processed/
+python -m reta.data.preprocess \
+  --events data/raw/diagnoses.csv \
+  --icd2ccs data/resources/icd_to_ccs.csv \
+  --ccs_hierarchy data/resources/ccs_hierarchy.csv \
+  --out_dir data/processed \
+  --h_anc 2
 ```
 ### Step 2: Knowledge Pool Construction
 Knowledge pool construction is performed offline and does not use any patient data.
+1. Distill artifacts (Definition + Cascade)
 ```bash
-python knowledge/distill.py
-python knowledge/grounding.py
-python knowledge/clustering.py
+python -m reta.knowledge.distill \
+  --concepts_csv data/resources/concepts.csv \
+  --out_jsonl knowledge/artifacts.jsonl
 ```
-The resulting knowledge templates will be saved under:
+2. Ground and filter
 ```bash
-knowledge/pool/
+python -m reta.knowledge.grounding \
+  --artifacts_jsonl knowledge/artifacts.jsonl \
+  --inventory_csv data/resources/inventory.csv \
+  --support_edges_csv data/resources/support_edges.csv \
+  --out_jsonl knowledge/grounded.jsonl
+```
+3. Cluster into templates (final pool)
+```bash
+python -m reta.knowledge.clustering \
+  --grounded_jsonl knowledge/grounded.jsonl \
+  --out_jsonl knowledge/templates.jsonl \
+  --tau 0.15
+```
+The final online retrieval pool is:
+```bash
+knowledge/templates.jsonl
 ```
 ### Step 3: Model Training
 Training follows a two-stage curriculum.
