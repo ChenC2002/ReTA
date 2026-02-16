@@ -22,6 +22,7 @@ reta/
 ├── train/           # Training pipelines (warm-up + RL)
 ├── inference/       # Inference-time augmentation & prediction
 └── utils/           # Metrics, graph utilities, logging
+```
 ## Running
 ### Step 1: Data Preparation
 This project uses MIMIC-III and MIMIC-IV for evaluation.
