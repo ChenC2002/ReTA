@@ -37,7 +37,7 @@ python data/preprocess.py \
   --dataset mimic-iv \
   --output_dir data/processed/
 ```
-### Step 2: Knowledge Pool Construction (Offline)
+### Step 2: Knowledge Pool Construction
 Knowledge pool construction is performed offline and does not use any patient data.
 ```bash
 python knowledge/distill.py
