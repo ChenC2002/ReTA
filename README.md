@@ -77,22 +77,43 @@ The final online retrieval pool is:
 knowledge/templates.jsonl
 ```
 ### Step 3: Model Training
-Training follows a two-stage curriculum.
+Training follows a two-stage curriculum: warm-up the encoder under stochastic augmentation exposure, then learn a PPO policy while refining the encoder.
 #### Stage 1: Encoder Warm-up
 ```bash
-python train/warmup.py \
-  --config configs/reta.yaml
+python -m reta.train.warmup --config configs/reta.yaml
 ```
-#### Stage 2: Policy Learning (PPO)
+Outputs:
 ```bash
-python train/rl_train.py \
-  --config configs/reta.yaml
+checkpoints/warmup.pt
+```
+#### Stage 2: Policy learning (PPO) + encoder refinement
+```bash
+python -m reta.train.rl_train \
+  --config configs/reta.yaml \
+  --warmup_ckpt checkpoints/warmup.pt
+```
+Outputs:
+```bash
+checkpoints/rl_iter*.pt
 ```
 ### Step 4: Inference and Evaluation
+Run inference with dynamic augmentation using a trained checkpoint:
 ```bash
-python inference/infer.py \
-  --checkpoint checkpoints/reta_best.pt \
-  --split test
+python -m reta.inference.infer \
+  --checkpoint checkpoints/rl_iter10.pt \
+  --processed_path data/processed/processed.pt \
+  --templates_jsonl knowledge/templates.jsonl \
+  --split all \
+  --device cuda \
+  --deterministic \
+  --out results/infer.json
 ```
+## Quickstart
+To verify the pipeline runs end-to-end without large datasets:
+Create tiny data/resources/concepts.csv, inventory.csv, support_edges.csv (few rows).
+Run Knowledge Pool Construction to generate knowledge/templates.jsonl.
+Run warm-up with a small processed dataset or a small subset of your data.
+Run inference with --max_patients 10.
+This confirms your installation, imports, and module wiring.
 ## Disclaimer
 This code is for research purposes only and is not intended for clinical use.
