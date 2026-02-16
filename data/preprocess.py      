@@ -1,0 +1,264 @@
+"""
+- Patient trajectories are sequences of visits.
+- Each visit aggregates diagnosis codes within a 24-hour window.
+- Inputs are ICD codes; targets are CCS categories at the *next* visit.
+- Visit graphs contain ICD nodes plus CCS ancestors within <=h levels, with CCS hierarchy edges.
+
+The code is intentionally flexible about input schema so it can be adapted to MIMIC-III/IV exports
+or other EHR datasets.
+
+Expected input (CSV/Parquet) at the event level (one row per diagnosis event):
+- patient_id: patient identifier
+- timestamp: event timestamp (datetime or string)
+- icd_code: ICD-9/10 diagnosis code
+
+You can override column names via CLI flags.
+
+Outputs:
+- processed.pt: a torch-serialized dict with patient trajectories and metadata.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+from dataclasses import dataclass
+from typing import Dict, List, Tuple, Optional
+
+import numpy as np
+import pandas as pd
+import torch
+
+try:
+    from .ontology import CCSOntology
+except ImportError:  # allow running as a script
+    from ontology import CCSOntology  # type: ignore
+
+
+# -------------------------
+# Utilities
+# -------------------------
+
+def _ensure_datetime(s: pd.Series) -> pd.Series:
+    if np.issubdtype(s.dtype, np.datetime64):
+        return s
+    return pd.to_datetime(s, errors='coerce', utc=True)
+
+
+def normalize_icd(code: str) -> str:
+    """Normalize ICD code string.
+
+    - Strip spaces
+    - Uppercase
+    - Remove dots for canonicalization (optional)
+
+    Note: Some pipelines keep dots. We remove dots to improve matching for many mapping files.
+    """
+    if code is None or (isinstance(code, float) and np.isnan(code)):
+        return ''
+    code = str(code).strip().upper()
+    code = code.replace('.', '')
+    return code
+
+
+def make_24h_visit_bins(df: pd.DataFrame, patient_col: str, time_col: str) -> pd.Series:
+    """Assign a visit_bin id by 24-hour aggregation.
+
+    For each patient, sort by time, then compute bin boundaries where time gap >= 24h.
+    Returns an integer series aligned with df.
+    """
+    df = df[[patient_col, time_col]].copy()
+    df[time_col] = _ensure_datetime(df[time_col])
+    # stable ordering for groupby
+    df['_row'] = np.arange(len(df))
+    df = df.sort_values([patient_col, time_col, '_row'])
+
+    bins = np.zeros(len(df), dtype=np.int64)
+    cur = 0
+    last_pid = None
+    last_time = None
+
+    for i, (pid, ts) in enumerate(zip(df[patient_col].values, df[time_col].values)):
+        if last_pid is None or pid != last_pid:
+            cur = 0
+            last_pid = pid
+            last_time = ts
+        else:
+            # gap in hours
+            if pd.isna(ts) or pd.isna(last_time):
+                # treat missing times as new bin to avoid leakage
+                cur += 1
+            else:
+                gap_h = (ts - last_time) / np.timedelta64(1, 'h')
+                if gap_h >= 24.0:
+                    cur += 1
+            last_time = ts
+        bins[i] = cur
+
+    df['visit_bin'] = bins
+    # revert to original row order
+    df = df.sort_values('_row')
+    return df['visit_bin']
+
+
+@dataclass
+class VisitRecord:
+    icd_codes: List[int]               # ICD token ids
+    ccs_ancestors: List[int]           # CCS ancestor token ids (including direct CCS)
+    node_ids: List[int]               # node ids used in visit graph
+    edge_index: np.ndarray            # shape (2, E) for PyG
+    label_ccs: Optional[List[int]] = None  # CCS label ids for next visit
+
+
+# -------------------------
+# Main preprocessing
+# -------------------------
+
+def preprocess(
+    events_path: str,
+    ontology: CCSOntology,
+    out_dir: str,
+    patient_col: str = 'patient_id',
+    time_col: str = 'timestamp',
+    icd_col: str = 'icd_code',
+    h_anc: int = 2,
+    min_visits: int = 2,
+    max_patients: Optional[int] = None,
+) -> Dict:
+    """Run preprocessing and serialize outputs.
+
+    Returns the dataset dict (also saved to disk).
+    """
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Load events
+    if events_path.endswith('.parquet'):
+        df = pd.read_parquet(events_path)
+    else:
+        df = pd.read_csv(events_path)
+
+    for c in [patient_col, time_col, icd_col]:
+        if c not in df.columns:
+            raise ValueError(f"Missing column '{c}' in events file. Available: {list(df.columns)[:20]}")
+
+    df = df[[patient_col, time_col, icd_col]].copy()
+    df[icd_col] = df[icd_col].map(normalize_icd)
+    df = df[df[icd_col].str.len() > 0]
+    df[time_col] = _ensure_datetime(df[time_col])
+    df = df.dropna(subset=[patient_col])
+
+    # Visit bins (24-hour aggregation)
+    df['visit_bin'] = make_24h_visit_bins(df, patient_col, time_col)
+
+    # Map ICD->token ids and ICD->CCS
+    df['icd_tok'] = df[icd_col].map(ontology.icd_to_token)
+    df = df.dropna(subset=['icd_tok'])
+    df['icd_tok'] = df['icd_tok'].astype(int)
+
+    # group to visits
+    visits = (df.groupby([patient_col, 'visit_bin'])['icd_tok']
+                .apply(lambda s: sorted(set(map(int, s.values.tolist()))))
+                .reset_index(name='icd_tokens'))
+
+    # sort visits by bin
+    visits = visits.sort_values([patient_col, 'visit_bin'])
+
+    # Build trajectories
+    trajectories = {}
+    patients = visits[patient_col].unique().tolist()
+    if max_patients is not None:
+        patients = patients[:max_patients]
+
+    for pid in patients:
+        vdf = visits[visits[patient_col] == pid]
+        icd_token_lists = vdf['icd_tokens'].tolist()
+        if len(icd_token_lists) < min_visits:
+            continue
+
+        traj = []
+        # Precompute next-visit CCS labels (multi-label ids)
+        next_labels = []
+        for t in range(len(icd_token_lists) - 1):
+            next_icd = icd_token_lists[t + 1]
+            next_ccs = sorted(set(ontology.icd_tokens_to_ccs_tokens(next_icd)))
+            next_labels.append(next_ccs)
+        next_labels.append(None)  # last visit has no next label
+
+        # Build visit graphs
+        for t, icd_tokens in enumerate(icd_token_lists):
+            ccs_nodes = sorted(set(ontology.icd_tokens_to_ccs_tokens(icd_tokens)))
+            anc = sorted(set(ontology.ancestors_within_h(ccs_nodes, h=h_anc)))
+            # Visit graph nodes: ICD + CCS ancestors
+            node_ids = sorted(set(icd_tokens + anc))
+            edge_index = ontology.edges_among_nodes(node_ids)
+
+            traj.append({
+                'icd_tokens': icd_tokens,
+                'ccs_ancestors': anc,
+                'node_ids': node_ids,
+                'edge_index': edge_index.astype(np.int64),
+                'label_ccs': next_labels[t]
+            })
+
+        trajectories[str(pid)] = traj
+
+    # metadata
+    dataset = {
+        'trajectories': trajectories,
+        'meta': {
+            'patient_col': patient_col,
+            'time_col': time_col,
+            'icd_col': icd_col,
+            'h_anc': h_anc,
+            'min_visits': min_visits,
+            'num_patients': len(trajectories),
+            'num_visits': int(sum(len(v) for v in trajectories.values())),
+            'icd_vocab_size': ontology.icd_vocab_size,
+            'ccs_vocab_size': ontology.ccs_vocab_size,
+            'token_namespace': 'shared',
+        },
+        'vocab': {
+            'token_to_name': ontology.token_to_name,
+            'name_to_token': ontology.name_to_token,
+            'icd_to_ccs': ontology.icd_to_ccs,
+        }
+    }
+
+    out_path = os.path.join(out_dir, 'processed.pt')
+    torch.save(dataset, out_path)
+    return dataset
+
+
+def build_argparser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description='Preprocess EHR events into visit trajectories and visit graphs.')
+    p.add_argument('--events', type=str, required=True, help='Path to event-level diagnoses (CSV/Parquet).')
+    p.add_argument('--icd2ccs', type=str, required=True, help='Path to ICD->CCS mapping CSV.')
+    p.add_argument('--ccs_hierarchy', type=str, required=True, help='Path to CCS hierarchy edges CSV.')
+    p.add_argument('--out_dir', type=str, required=True, help='Output directory.')
+    p.add_argument('--patient_col', type=str, default='patient_id')
+    p.add_argument('--time_col', type=str, default='timestamp')
+    p.add_argument('--icd_col', type=str, default='icd_code')
+    p.add_argument('--h_anc', type=int, default=2)
+    p.add_argument('--min_visits', type=int, default=2)
+    p.add_argument('--max_patients', type=int, default=None)
+    return p
+
+
+def main():
+    args = build_argparser().parse_args()
+    ontology = CCSOntology.from_files(args.icd2ccs, args.ccs_hierarchy)
+    preprocess(
+        events_path=args.events,
+        ontology=ontology,
+        out_dir=args.out_dir,
+        patient_col=args.patient_col,
+        time_col=args.time_col,
+        icd_col=args.icd_col,
+        h_anc=args.h_anc,
+        min_visits=args.min_visits,
+        max_patients=args.max_patients,
+    )
+
+
+if __name__ == '__main__':
+    main()
