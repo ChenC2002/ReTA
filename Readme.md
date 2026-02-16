@@ -13,7 +13,7 @@
    + Structure channel (graph message passing)
    + Adaptive gating to fuse both views
 ## Repository Structure
-'
+```text
 reta/
 ├── data/            # EHR preprocessing and datasets
 ├── knowledge/       # Knowledge pool construction (offline)
@@ -22,4 +22,4 @@ reta/
 ├── train/           # Training pipelines (warm-up + RL)
 ├── inference/       # Inference-time augmentation & prediction
 └── utils/           # Metrics, graph utilities, logging
-'
+
