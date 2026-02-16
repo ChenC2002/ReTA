@@ -46,7 +46,9 @@ python knowledge/grounding.py
 python knowledge/clustering.py
 ```
 The resulting knowledge templates will be saved under:
+```bash
 knowledge/pool/
+```
 ### Step 3: Model Training
 Training follows a two-stage curriculum.
 #### Stage 1: Encoder Warm-up
