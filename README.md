@@ -53,6 +53,20 @@ reta/             Command-line helpers and package entrypoint
 | Stage 1 training | `train.warmup` | Walks patient trajectories in order and trains encoder/predictor under stochastic Soft/Hard exposure. |
 | Stage 2 training | `train.rl_train` | Learns the visit-level policy and refines the encoder. |
 | Inference | `inference.infer` | Runs sequential retrieval, policy selection, augmentation, prediction, and metric reporting. |
+
+## Quickstart
+To run a small end-to-end check:
+- Validate the tiny template artifact in `examples/tiny_templates.jsonl`.
+- Run the dependency-light smoke test:
+```bash
+python tests/smoke_test.py
+```
+- Create tiny data/resources/concepts.csv, inventory.csv, support_edges.csv.
+- Run Knowledge Pool Construction to generate knowledge/templates.jsonl.
+- Run warm-up with a small processed dataset or a small subset of your data.
+- Run inference with --max_patients 10.
+
+
 ## Running
 ### Installation
 ```bash
@@ -177,18 +191,4 @@ python -m reta.inference.infer \
   --deterministic \
   --out results/infer.json
 ```
-## Quickstart
-To run a small end-to-end check:
-- Validate the tiny template artifact in `examples/tiny_templates.jsonl`.
-- Run the dependency-light smoke test:
-```bash
-python tests/smoke_test.py
-```
-- Create tiny data/resources/concepts.csv, inventory.csv, support_edges.csv.
-- Run Knowledge Pool Construction to generate knowledge/templates.jsonl.
-- Run warm-up with a small processed dataset or a small subset of your data.
-- Run inference with --max_patients 10.
 
-## Data And Assets
-
-Full experiments expect credentialed MIMIC-III/MIMIC-IV diagnosis tables, ICD-to-CCS mappings, a CCS hierarchy, biomedical entity inventories, and external KG support edges. Restricted clinical data and external KG assets are not included.
