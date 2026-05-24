@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.DS_Store
+
+.venv/
+venv/
+
+data/raw/
+data/processed/
+data/resources/
+knowledge/artifacts.jsonl
+knowledge/grounded.jsonl
+knowledge/templates.jsonl
+checkpoints/
+results/
+runs/
