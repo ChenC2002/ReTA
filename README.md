@@ -1,6 +1,6 @@
 # Import What You Need: Learning When and How to Augment EHR Graphs with External Knowledge
 
-![Overview of ReTA: offline knowledge pool, visit-level augmentation policy, and decoupled encoder](assets/reta_overview.png)
+![Overview of ReTA: offline knowledge pool, visit-level augmentation policy, and decoupled encoder](assets/reta_overview.pdf)
 
 </div>
 
