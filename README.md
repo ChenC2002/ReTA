@@ -216,8 +216,7 @@ Local inference reports `AUPRC_micro`, `MicroF1@0.5`, and `Acc@20` on the
 
 Paper-reported numbers are included as synchronized reference artifacts in
 [`results/paper_results.json`](results/paper_results.json) and
-[`logs/paper_results.jsonl`](logs/paper_results.jsonl). The runnable pipeline
-does not regenerate every record in these files.
+[`logs/paper_results.jsonl`](logs/paper_results.jsonl). 
 
 | Output                                       | Path                                                         |
 | -------------------------------------------- | ------------------------------------------------------------ |
@@ -228,7 +227,3 @@ does not regenerate every record in these files.
 | Local diagnosis evaluation                   | `results/inference.json`                                     |
 | Runtime logs                                 | `logs/warmup.log`, `logs/rl_train.log`, `logs/inference.log` |
 
-Generated clinical-data derivatives, mappings, checkpoints, local results, and
-runtime logs are ignored by Git. `processed.pt` uses PyTorch serialization, so
-load only locally generated or otherwise trusted processed data. Checkpoints
-use restricted tensor-only loading and are bound to their runtime contracts.
