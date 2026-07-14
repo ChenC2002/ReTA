@@ -175,9 +175,7 @@ reta build-entity-map \
 ### Step 3: Train
 
 Review [`configs/reta.yaml`](configs/reta.yaml) before training. Its defaults
-match the main paper settings where implemented, including `K = 20`, model
-dimension 256, two GNN layers, four attention heads, 30 warm-up epochs, and 50
-RL iterations.
+match the main paper settings where implemented.
 
 ```bash
 python -m reta.learning.warmup --config configs/reta.yaml
