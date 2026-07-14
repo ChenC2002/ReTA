@@ -13,23 +13,27 @@ and 30-day readmission on MIMIC-III and MIMIC-IV. This repository includes the
 paper-wide numeric results and ordered result log, together with the runnable
 implementation of the main next-visit diagnosis workflow.
 
-| Method component | Code path | Role |
-| --- | --- | --- |
-| Visit construction | `data.preprocess`, `data.ontology` | Aggregates diagnoses into 24-hour visits, maps ICD to CCS, and builds visit graphs with CCS ancestors. |
-| Template artifact | `knowledge.templates` | Defines distilled, grounded, and clustered template contracts plus template-pool validation. |
-| Grounding/filtering | `knowledge.grounding` | Maps cascade mentions to biomedical identifiers and keeps externally supported links. |
-| Template clustering | `knowledge.clustering` | Embeds definition+cascade text, clusters redundant artifacts, and projects template vectors into `R^d`. |
-| History-aware retrieval | `knowledge.pool` | Retrieves Top-K templates from current visit codes and trajectory state. |
-| Soft/Hard/Skip actions | `policy.action` | Encodes the `2K+1` action space. |
-| Policy state | `policy.state` | Combines GRU history, current base visit embedding, uncertainty, and template utilities. |
-| Paired reward | `policy.reward` | Computes `L_raw - L_edit` with Hard Import cost and zero reward for Skip. |
-| Policy optimization | `policy.reinforce` | Computes REINFORCE updates with discounted returns and a running baseline. |
-| Decoupled encoder | `model.encoder`, `model.semantic_encoder`, `model.structure_encoder`, `model.fusion` | Separates feature-only semantic encoding from full-graph structural message passing. |
-| Stage 1 training | `train.warmup` | Walks patient trajectories in order and trains encoder/predictor under stochastic Soft/Hard exposure. |
-| Stage 2 training | `train.rl_train` | Learns the visit-level policy and refines the encoder. |
-| Inference | `inference.infer` | Runs sequential retrieval, policy selection, augmentation, prediction, and metric reporting. |
+## Repository and method map
 
-## Quickstart
+| Path | Method and responsibility |
+| --- | --- |
+| `reta/data/` | Preserve ICD identifiers, combine events in fixed 24-hour windows, map ICD-9/10 to CCS, build visit graphs, and write local split manifests. |
+| `reta/knowledge/` | Validate distillation responses, ground and filter cascades, cluster ClinicalBERT representations, and retrieve Top-K templates. |
+| `reta/learning/model.py` | Encode semantic and structural visit views, apply Soft/Hard augmentation, and predict direct next-visit CCS labels. |
+| `reta/learning/policy.py` | Define the masked Soft/Hard/Skip action space, policy state, paired reward, and REINFORCE update. |
+| `reta/learning/runtime.py` | Enforce configuration, vocabulary, retrieval-space, split, and checkpoint contracts shared by training and inference. |
+| `reta/learning/warmup.py`, `rl_train.py`, `inference.py` | Run encoder warm-up, policy refinement, and deterministic evaluation. |
+| `configs/`, `examples/`, `tests/` | Hold the default experiment, a minimal valid template, and contract/regression tests. |
+| `results/`, `logs/` | Store the paper-wide structured results and synchronized result log; also receive local evaluation and runtime outputs. |
+
+The implementation is consolidated into three package domains: `data`,
+`knowledge`, and `learning`. Generated datasets and pools live under `data/`;
+model checkpoints live under `checkpoints/`.
+
+
+## Run
+
+### Quickstart
 To run a small end-to-end check:
 - Validate the tiny template artifact in `examples/tiny_templates.jsonl`.
 - Run the dependency-light smoke test:
@@ -41,8 +45,6 @@ python tests/smoke_test.py
 - Run warm-up with a small processed dataset or a small subset of your data.
 - Run inference with --max_patients 10.
 
-
-## Run
 ### Installation
 
 ```bash
@@ -64,7 +66,7 @@ reta validate-template-pool \
 python -m unittest discover -s tests -p 'test*.py'
 ```
 
-## Results and log
+### Results and log
 
 The paper's reported numeric results are versioned in two synchronized
 formats:
@@ -81,24 +83,7 @@ formats:
 Record IDs are identical across both files, making the JSON convenient for
 analysis and the JSONL convenient for streaming or indexing.
 
-## Repository and method map
-
-| Path | Method and responsibility |
-| --- | --- |
-| `reta/data/` | Preserve ICD identifiers, combine events in fixed 24-hour windows, map ICD-9/10 to CCS, build visit graphs, and write local split manifests. |
-| `reta/knowledge/` | Validate distillation responses, ground and filter cascades, cluster ClinicalBERT representations, and retrieve Top-K templates. |
-| `reta/learning/model.py` | Encode semantic and structural visit views, apply Soft/Hard augmentation, and predict direct next-visit CCS labels. |
-| `reta/learning/policy.py` | Define the masked Soft/Hard/Skip action space, policy state, paired reward, and REINFORCE update. |
-| `reta/learning/runtime.py` | Enforce configuration, vocabulary, retrieval-space, split, and checkpoint contracts shared by training and inference. |
-| `reta/learning/warmup.py`, `rl_train.py`, `inference.py` | Run encoder warm-up, policy refinement, and deterministic evaluation. |
-| `configs/`, `examples/`, `tests/` | Hold the default experiment, a minimal valid template, and contract/regression tests. |
-| `results/`, `logs/` | Store the paper-wide structured results and synchronized result log; also receive local evaluation and runtime outputs. |
-
-The implementation is consolidated into three package domains: `data`,
-`knowledge`, and `learning`. Generated datasets and pools live under `data/`;
-model checkpoints live under `checkpoints/`.
-
-## Next-visit diagnosis workflow
+## Pipeline
 
 The runnable path below implements the paper's main multi-label CCS diagnosis
 task. The result and log files above also cover the paper's mortality,
@@ -224,7 +209,7 @@ The default inference result contains aggregate metrics only. Optional
 per-sample action metadata uses run-local patient indices rather than source
 patient identifiers.
 
-## Outputs
+### Outputs
 
 | Genre | Paths |
 | --- | --- |
