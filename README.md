@@ -110,16 +110,11 @@ For mixed ICD-9/10 input, include an `icd_version` column in both files and
 append `--icd_version_col icd_version` and
 `--mapping_icd_version_col icd_version` to the command.
 
-This writes:
 
 - `data/processed/processed.pt`, containing vocabularies and patient
   trajectories; and
 - `data/processed/splits.json`, containing deterministic, patient-disjoint
   train/validation/test identifiers.
-
-> **Split note:** preprocessing creates a seeded, patient-disjoint 70/10/20
-> split. It does not reconstruct the paper's discharge-time temporal split, so
-> metrics from the generated split are not directly comparable with the paper.
 
 ### Step 2: Build the Pool
 
