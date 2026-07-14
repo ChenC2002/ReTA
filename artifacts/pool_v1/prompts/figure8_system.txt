@@ -1,0 +1,1 @@
+You are an expert clinical pathologist. Given the diagnosis below, provide a structured knowledge summary to assist in sequential predictive modeling.

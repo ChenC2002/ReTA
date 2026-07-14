@@ -160,7 +160,7 @@ def choose_medoid(cluster_indices: List[int], X: np.ndarray, gts: List[GroundedT
 
 def cluster_templates(
     grounded: List[GroundedTemplate],
-    tau: float = 0.15,
+    tau: float = 0.16,
     model_name: str = "emilyalsentzer/Bio_ClinicalBERT",
     projection_dim: int = 256,
 ) -> List[KnowledgeTemplate]:
@@ -219,7 +219,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Cluster grounded templates into knowledge pool.")
     p.add_argument("--grounded_jsonl", type=str, required=True)
     p.add_argument("--out_jsonl", type=str, required=True)
-    p.add_argument("--tau", type=float, default=0.15)
+    p.add_argument("--tau", type=float, default=0.16)
     p.add_argument("--model_name", type=str, default="emilyalsentzer/Bio_ClinicalBERT")
     p.add_argument("--projection_dim", type=int, default=256, help="Template vector dimension d used by the encoder.")
     return p

@@ -164,6 +164,7 @@ def validate_grounded_template(template: GroundedTemplate) -> List[str]:
         errors.append(f"{template.root_concept_id}: duplicate subgraph_nodes")
 
     seen_edges = set()
+    adjacency: Dict[str, List[str]] = {node: [] for node in node_set}
     for u, v in template.subgraph_edges:
         if u == v:
             errors.append(f"{template.root_concept_id}: self-loop edge {u}->{v}")
@@ -171,10 +172,28 @@ def validate_grounded_template(template: GroundedTemplate) -> List[str]:
             errors.append(f"{template.root_concept_id}: edge references unknown node {u}")
         if v not in node_set:
             errors.append(f"{template.root_concept_id}: edge references unknown node {v}")
-        key = (u, v)
+        key = tuple(sorted((u, v)))
         if key in seen_edges:
-            errors.append(f"{template.root_concept_id}: duplicate edge {u}->{v}")
+            errors.append(f"{template.root_concept_id}: duplicate undirected edge {u}<->{v}")
         seen_edges.add(key)
+        if u in node_set and v in node_set and u != v:
+            adjacency[u].append(v)
+            adjacency[v].append(u)
+
+    if template.root_concept_id in node_set:
+        reachable = {template.root_concept_id}
+        frontier = [template.root_concept_id]
+        while frontier:
+            current = frontier.pop()
+            for neighbor in adjacency.get(current, []):
+                if neighbor not in reachable:
+                    reachable.add(neighbor)
+                    frontier.append(neighbor)
+        disconnected = sorted(node_set - reachable)
+        if disconnected:
+            errors.append(
+                f"{template.root_concept_id}: subgraph contains root-disconnected nodes: {', '.join(disconnected)}"
+            )
     return errors
 
 
@@ -200,10 +219,16 @@ def validate_knowledge_template(template: KnowledgeTemplate, expected_dim: Optio
         norm_sq += float(value) * float(value)
     if template.vector and norm_sq <= 0.0:
         errors.append(f"template {template.template_id}: zero vector")
+    elif template.vector and abs(math.sqrt(norm_sq) - 1.0) > 1e-3:
+        errors.append(f"template {template.template_id}: vector is not L2-normalized")
     if template.medoid_idx < 0:
         errors.append(f"template {template.template_id}: medoid_idx must be non-negative")
     if not template.member_indices:
         errors.append(f"template {template.template_id}: empty member_indices")
+    elif len(set(template.member_indices)) != len(template.member_indices):
+        errors.append(f"template {template.template_id}: duplicate member_indices")
+    if template.medoid_idx >= 0 and template.medoid_idx not in template.member_indices:
+        errors.append(f"template {template.template_id}: medoid_idx is absent from member_indices")
     errors.extend(f"template {template.template_id}: {msg}" for msg in validate_grounded_template(template.medoid))
     return errors
 
