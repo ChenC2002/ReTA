@@ -90,7 +90,7 @@ generated concept-level distillation responses.
 The preprocessing and filtering hierarchy files use opposite column orders.
 Do not reuse one file for both stages without reorienting its columns.
 
-## Diagnosis Workflow
+## Workflow
 
 ### Step 1: Preprocess
 
