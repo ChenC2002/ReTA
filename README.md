@@ -220,8 +220,6 @@ python -m reta.learning.inference \
   --out results/inference.json
 ```
 
-<<<<<<< HEAD
-=======
 The default inference result contains aggregate metrics only. Optional
 per-sample action metadata uses run-local patient indices rather than source
 patient identifiers.
