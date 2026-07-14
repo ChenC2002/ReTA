@@ -1,0 +1,4 @@
+include configs/reta.yaml
+include examples/tiny_templates.jsonl
+include logs/paper_results.jsonl
+include results/paper_results.json

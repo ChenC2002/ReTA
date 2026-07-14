@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reta-healthcare"
+version = "1.0.0"
+description = "Learning when and how to augment longitudinal EHR graphs with external knowledge"
+readme = "README.md"
+requires-python = ">=3.10,<3.12"
+dynamic = ["dependencies"]
+keywords = ["electronic health records", "graph neural networks", "reinforcement learning"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.scripts]
+reta = "reta.cli:main"
+
+[project.urls]
+Repository = "https://github.com/ChenC2002/ReTA"
+Issues = "https://github.com/ChenC2002/ReTA/issues"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+include = ["reta*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"reta.knowledge" = [
+  "releases/pool_v1/README.md",
+  "releases/pool_v1/config.yaml",
+  "releases/pool_v1/manifest.json",
+  "releases/pool_v1/*.txt",
+  "releases/pool_v1/schemas/*.json",
+]
+
+[tool.setuptools.exclude-package-data]
+"*" = [".DS_Store", "*.pyc", "*.pyo"]

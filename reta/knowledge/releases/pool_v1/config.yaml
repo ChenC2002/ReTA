@@ -1,0 +1,57 @@
+schema_version: "1.0"
+
+release:
+  id: pool_v1
+  version: 1.0.0
+  status: released
+  assembled_date: "2026-07-13"
+  distribution: public
+
+distillation:
+  model_family: GPT-4o
+  temperature: 0.2
+  top_p: 0.9
+  max_tokens: 256
+  request_mode: independent_per_concept
+  patient_context_included: false
+  system_prompt: system_prompt.txt
+  user_prompt: user_prompt.txt
+  response_schema: schemas/llm_response.schema.json
+  artifact_schema: schemas/distilled_artifact.schema.json
+  density_labels:
+    - sparse
+    - moderate
+    - dense
+  cascade_min_items: 1
+  cascade_max_items: 5
+
+grounding:
+  exact_match_first: true
+  fallback_mode: precomputed_top1_candidate
+  candidate_embedding_model: emilyalsentzer/Bio_ClinicalBERT
+  candidate_embedding_revision: d5892b39a4adaed74b92212a44081509db72f87b
+  candidate_embedding_backend: transformers_mean_pooling
+  top_1_similarity_threshold: 0.90
+  threshold_comparison: greater_than
+
+filtering:
+  accept_direct_primekg_edge: true
+  accept_ccs_ancestor_descendant_relation: true
+  ccs_hierarchy_max_levels: 2
+  audit_output: results/filtering_audit.jsonl
+  summary_output: results/filtering_summary.json
+
+clustering:
+  algorithm: agglomerative
+  distance: cosine
+  embedding_model: emilyalsentzer/Bio_ClinicalBERT
+  embedding_revision: d5892b39a4adaed74b92212a44081509db72f87b
+  embedding_backend: transformers_mean_pooling
+  embedding_max_length: 256
+  distance_cut_tau: 0.16
+  projection_dim: 256
+  random_state_for_svd: 0
+
+pool_output:
+  path: data/knowledge/templates.jsonl
+  projection_dim: 256

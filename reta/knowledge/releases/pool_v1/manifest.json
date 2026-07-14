@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "release_id": "pool_v1",
+  "version": "1.0.0",
+  "status": "released",
+  "status_detail": "Final ReTA knowledge-pool configuration release.",
+  "assembled_date": "2026-07-13",
+  "project": {
+    "name": "ReTA",
+    "description": "Learning when and how to augment longitudinal EHR graphs with external knowledge"
+  },
+  "model_stack": {
+    "distillation": "GPT-4o",
+    "grounding_and_embeddings": {
+      "model": "emilyalsentzer/Bio_ClinicalBERT",
+      "revision": "d5892b39a4adaed74b92212a44081509db72f87b",
+      "backend": "transformers_mean_pooling"
+    }
+  },
+  "external_dependencies": {
+    "mimic_iii": {
+      "provider": "PhysioNet",
+      "access": "credentialed"
+    },
+    "mimic_iv": {
+      "provider": "PhysioNet",
+      "access": "credentialed"
+    },
+    "primekg": {
+      "role": "biomedical relation support"
+    },
+    "umls": {
+      "role": "biomedical concept normalization",
+      "access": "license governed"
+    }
+  },
+  "tools": {
+    "filtering_module": "reta.knowledge.filtering",
+    "validator_module": "reta.knowledge.release"
+  },
+  "integrity_scope": "Every release file in files[] is covered by a SHA-256 digest. manifest.json is excluded to avoid a self-referential hash.",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "59a864e35e6cb7cca086813ec06c661e29fe59c34ad08f5087c57381fdbecd86",
+      "bytes": 1406,
+      "records": null,
+      "role": "release_documentation",
+      "required": true
+    },
+    {
+      "path": "config.yaml",
+      "sha256": "c77a7b896be9df27e0ec09297c24b5bef5e60ec03c210d51a5813c4a2d43a4ba",
+      "bytes": 1539,
+      "records": null,
+      "role": "runtime_configuration",
+      "required": true
+    },
+    {
+      "path": "system_prompt.txt",
+      "sha256": "5a193d957e04cde9878c1de9d06b6c71925f2b88b6af2ae9d184442b3b89f397",
+      "bytes": 134,
+      "records": null,
+      "role": "distillation_system_prompt",
+      "required": true
+    },
+    {
+      "path": "user_prompt.txt",
+      "sha256": "ccde9eedce0c99bdb5e14241dd8fac71693043f2298428544a9391bb35589e76",
+      "bytes": 312,
+      "records": null,
+      "role": "distillation_user_prompt",
+      "required": true
+    },
+    {
+      "path": "schemas/distilled_artifact.schema.json",
+      "sha256": "4238e327b6c57f53c86a792faef882d1ce7929f69354be52f84ca632692b97b2",
+      "bytes": 923,
+      "records": null,
+      "role": "distilled_artifact_schema",
+      "required": true
+    },
+    {
+      "path": "schemas/llm_response.schema.json",
+      "sha256": "8e21a133bcbed4f6f6ba71be9068c26dcdcb27c16f66681e528cae67ebe9ca87",
+      "bytes": 788,
+      "records": null,
+      "role": "llm_response_schema",
+      "required": true
+    }
+  ]
+}

@@ -12,13 +12,14 @@ from pathlib import Path
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
-from artifacts.pool_v1.filtering import (
+from reta.knowledge.filtering import (
     EmbeddingCandidate,
     EmbeddingCandidateIndex,
     Entity,
     Inventory,
     SupportIndex,
     filter_artifact_objects,
+    filter_artifacts_jsonl,
     main,
 )
 
@@ -68,21 +69,21 @@ class PoolV1FilteringTests(unittest.TestCase):
             [
                 Entity("ROOT", "Root disease", "ICD-10"),
                 Entity("PKG", "Shared name", "PrimeKG"),
-                Entity("CCS", "Shared name", "CCS"),
+                Entity("CCS:SHARED", "Shared name", "CCS"),
             ]
         )
         candidates = EmbeddingCandidateIndex([EmbeddingCandidate("Shared name", "PKG", 0.99)])
         result = filter_artifact_objects(
             [artifact(["Shared name"])],
             inventory,
-            SupportIndex(primekg_edges=[("ROOT", "CCS", None)]),
+            SupportIndex(primekg_edges=[("ROOT", "CCS:SHARED", None)]),
             candidates,
         )
 
-        self.assertEqual(result.grounded[0]["cascade_entities"][0]["entity_id"], "CCS")
+        self.assertEqual(result.grounded[0]["cascade_entities"][0]["entity_id"], "CCS:SHARED")
         mapping = result.audit[0]["mapping"]
         self.assertEqual(mapping["method"], "exact")
-        self.assertEqual(mapping["evidence"]["exact_candidate_ids"], ["CCS", "PKG"])
+        self.assertEqual(mapping["evidence"]["exact_candidate_ids"], ["CCS:SHARED", "PKG"])
         self.assertFalse(mapping["evidence"]["embedding_candidate_consulted"])
 
     def test_embedding_threshold_is_strictly_greater_than_point_nine(self):
@@ -157,7 +158,7 @@ class PoolV1FilteringTests(unittest.TestCase):
     def test_ccs_two_hop_path_preserves_intermediate_node_and_actual_edges(self):
         inventory = Inventory(
             [
-                Entity("ROOT", "Root disease", "ICD-10"),
+                Entity("ROOT", "Root disease", "CCS"),
                 Entity("TARGET", "Target complication", "CCS"),
                 Entity("MID", "Intermediate category", "CCS"),
             ]
@@ -166,13 +167,13 @@ class PoolV1FilteringTests(unittest.TestCase):
         result = filter_artifact_objects([artifact(["Target complication"])], inventory, support)
 
         grounded = result.grounded[0]
-        self.assertEqual(grounded["subgraph_nodes"], ["ROOT", "MID", "TARGET"])
-        self.assertEqual(grounded["subgraph_edges"], [["MID", "ROOT"], ["MID", "TARGET"]])
+        self.assertEqual(grounded["subgraph_nodes"], ["CCS:ROOT", "CCS:MID", "CCS:TARGET"])
+        self.assertEqual(grounded["subgraph_edges"], [["CCS:MID", "CCS:ROOT"], ["CCS:MID", "CCS:TARGET"]])
         evidence = result.audit[0]["support"]
         self.assertEqual(evidence["kind"], "ccs_hierarchy")
         self.assertEqual(evidence["direction"], "root_is_ancestor")
         self.assertEqual(evidence["hops"], 2)
-        self.assertEqual(evidence["path_nodes"], ["ROOT", "MID", "TARGET"])
+        self.assertEqual(evidence["path_nodes"], ["CCS:ROOT", "CCS:MID", "CCS:TARGET"])
 
     def test_ccs_descendant_path_is_allowed_but_sibling_and_three_hop_paths_are_not(self):
         descendant_inventory = Inventory(
@@ -188,7 +189,10 @@ class PoolV1FilteringTests(unittest.TestCase):
             SupportIndex(ccs_edges=[("ANCESTOR", "MID"), ("MID", "ROOT")]),
         )
         self.assertEqual(descendant.audit[0]["support"]["direction"], "root_is_descendant")
-        self.assertEqual(descendant.audit[0]["support"]["path_nodes"], ["ROOT", "MID", "ANCESTOR"])
+        self.assertEqual(
+            descendant.audit[0]["support"]["path_nodes"],
+            ["CCS:ROOT", "CCS:MID", "CCS:ANCESTOR"],
+        )
 
         sibling_inventory = Inventory(
             [
@@ -232,6 +236,74 @@ class PoolV1FilteringTests(unittest.TestCase):
         self.assertEqual(grounded["subgraph_edges"], [["ROOT", "TARGET"]])
         self.assertEqual([item["status"] for item in result.audit], ["accepted", "accepted", "rejected"])
         self.assertEqual(result.audit[-1]["reason"], "self_reference_or_missing_endpoint")
+
+    def test_cascade_order_is_preserved_after_entity_deduplication(self):
+        inventory = Inventory(
+            [
+                Entity("ROOT", "Root disease", "ICD-10"),
+                Entity("Z", "First event", "PrimeKG"),
+                Entity("A", "Second event", "PrimeKG"),
+            ]
+        )
+        result = filter_artifact_objects(
+            [artifact(["First event", "Second event"])],
+            inventory,
+            SupportIndex(primekg_edges=[("ROOT", "Z", None), ("ROOT", "A", None)]),
+        )
+        self.assertEqual(
+            [entity["entity_id"] for entity in result.grounded[0]["cascade_entities"]],
+            ["Z", "A"],
+        )
+
+    def test_ccs_ids_are_canonical_and_cycles_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            SupportIndex(ccs_edges=[("A", "B"), ("B", "A")])
+
+        inventory = Inventory(
+            [Entity("ROOT", "Root disease", "CCS"), Entity("TARGET", "Target complication", "CCS")]
+        )
+        result = filter_artifact_objects(
+            [artifact(["Target complication"])],
+            inventory,
+            SupportIndex(ccs_edges=[("ROOT", "TARGET")]),
+        )
+        self.assertEqual(result.grounded[0]["root_concept_id"], "CCS:ROOT")
+        self.assertEqual(result.grounded[0]["subgraph_edges"], [["CCS:ROOT", "CCS:TARGET"]])
+
+    def test_nonfinite_meta_is_a_format_failure(self):
+        malformed = artifact(["Target complication"], meta={"value": float("nan")})
+        result = filter_artifact_objects(
+            [malformed],
+            self.inventory,
+            SupportIndex(primekg_edges=[("ROOT", "TARGET", None)]),
+        )
+        self.assertEqual(result.grounded, [])
+        self.assertEqual(result.audit[0]["first_failure"], "format")
+        self.assertIn(
+            {"field": "meta", "reason": "finite_json_object_required"},
+            result.audit[0]["format_evidence"]["errors"],
+        )
+
+    def test_duplicate_artifact_json_keys_are_a_format_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifacts = Path(tmp) / "artifacts.jsonl"
+            artifacts.write_text(
+                '{"concept_id":"ROOT","concept_id":"OTHER","concept_name":"Root disease",'
+                '"definition":"Definition.","cascade":["Target complication"],"meta":{}}\n',
+                encoding="utf-8",
+            )
+            result = filter_artifacts_jsonl(
+                str(artifacts),
+                self.inventory,
+                SupportIndex(primekg_edges=[("ROOT", "TARGET", None)]),
+            )
+
+            self.assertEqual(result.grounded, [])
+            self.assertEqual(result.audit[0]["first_failure"], "format")
+            self.assertIn(
+                "duplicate JSON object key 'concept_id'",
+                result.audit[0]["format_evidence"]["errors"][0]["reason"],
+            )
 
     def test_cli_writes_grounded_audit_and_summary_with_invalid_json_first_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
