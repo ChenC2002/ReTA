@@ -10,9 +10,6 @@ patient trajectory. Instead of expanding every EHR graph with the same
 knowledge, ReTA selects a retrieved template and applies **Soft Import**,
 **Hard Import**, or **Skip** according to the evolving patient state.
 
-This repository implements the main next-visit, multi-label CCS diagnosis
-workflow. Paper-wide results for the additional tasks and analyses are included
-as reference artifacts rather than separate runnable pipelines.
 
 ## Method Map
 
@@ -35,9 +32,8 @@ test suite is in [`tests/`](tests).
 
 ### Install
 
-ReTA supports Python 3.10 and 3.11. Dependencies are pinned in
-[`requirements.txt`](requirements.txt), including PyTorch 2.1.2 and PyTorch
-Geometric 2.4.0.
+Dependencies are pinned in
+[`requirements.txt`](requirements.txt).
 
 ```bash
 git clone https://github.com/ChenC2002/ReTA.git
@@ -65,9 +61,6 @@ Run the full test suite with:
 ```bash
 python -m unittest discover -s tests -p 'test*.py'
 ```
-
-The tiny template validates artifact contracts but cannot train the default
-256-dimensional model.
 
 ## Required Inputs
 
