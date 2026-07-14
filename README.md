@@ -241,10 +241,3 @@ by Git. PyTorch serialization is used for `processed.pt`, so load only a
 locally generated or otherwise trusted processed dataset. Checkpoints use
 restricted tensor-only loading and are bound to their exact runtime contracts.
 
-## Data access
-
-Full experiments require credentialed MIMIC-III or MIMIC-IV diagnosis data,
-ICD-to-CCS mappings, a CCS hierarchy, biomedical entity inventories, and
-external relation data such as PrimeKG or UMLS. Obtain restricted resources
-directly from their providers under the applicable terms.
->>>>>>> f7c6842 (Finalize paper-matched ReTA release)
