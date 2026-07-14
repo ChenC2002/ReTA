@@ -1,107 +1,110 @@
 # Import What You Need: Learning When and How to Augment EHR Graphs with External Knowledge
 
-ReTA (Reinforcement learning-based dynamic Topology Augmentation) learns when
-and how to augment longitudinal EHR graphs with external knowledge. At each
-visit, it retrieves from an offline, quality-filtered pool of KG-grounded
-templates and selects one budget-aware action: Soft Import for feature-only
-semantic enrichment, Hard Import for compact topology grafting, or Skip when
-augmentation is unnecessary. A decoupled encoder processes semantic and
-structural signals separately before adaptive fusion.
+![Overview of ReTA: offline knowledge pool, visit-level augmentation policy, and decoupled encoder](assets/reta_overview.png)
 
-The paper evaluates next-visit diagnosis prediction, in-hospital mortality,
-and 30-day readmission on MIMIC-III and MIMIC-IV. This repository includes the
-paper-wide numeric results and ordered result log, together with the runnable
-implementation of the main next-visit diagnosis workflow.
+</div>
 
-## Repository and method map
+ReTA (**Re**inforcement learning-based dynamic **T**opology **A**ugmentation)
+learns whether, what, and how to import external knowledge at each visit in a
+patient trajectory. Instead of expanding every EHR graph with the same
+knowledge, ReTA selects a retrieved template and applies **Soft Import**,
+**Hard Import**, or **Skip** according to the evolving patient state.
 
-| Path | Method and responsibility |
-| --- | --- |
-| `reta/data/` | Preserve ICD identifiers, combine events in fixed 24-hour windows, map ICD-9/10 to CCS, build visit graphs, and write local split manifests. |
-| `reta/knowledge/` | Validate distillation responses, ground and filter cascades, cluster ClinicalBERT representations, and retrieve Top-K templates. |
-| `reta/learning/model.py` | Encode semantic and structural visit views, apply Soft/Hard augmentation, and predict direct next-visit CCS labels. |
-| `reta/learning/policy.py` | Define the masked Soft/Hard/Skip action space, policy state, paired reward, and REINFORCE update. |
-| `reta/learning/runtime.py` | Enforce configuration, vocabulary, retrieval-space, split, and checkpoint contracts shared by training and inference. |
-| `reta/learning/warmup.py`, `rl_train.py`, `inference.py` | Run encoder warm-up, policy refinement, and deterministic evaluation. |
-| `configs/`, `examples/`, `tests/` | Hold the default experiment, a minimal valid template, and contract/regression tests. |
-| `results/`, `logs/` | Store the paper-wide structured results and synchronized result log; also receive local evaluation and runtime outputs. |
+This repository implements the main next-visit, multi-label CCS diagnosis
+workflow. Paper-wide results for the additional tasks and analyses are included
+as reference artifacts rather than separate runnable pipelines.
 
-The implementation is consolidated into three package domains: `data`,
-`knowledge`, and `learning`. Generated datasets and pools live under `data/`;
-model checkpoints live under `checkpoints/`.
+## Method Map
 
+The implementation follows the same sequence as the paper method:
 
-## Run
+| Paper stage                         | Implementation                                               | Responsibility                                               |
+| ----------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **Visit Graph Construction (§2.1)** | [`reta/data/`](reta/data)                                    | Normalize ICD codes, map ICD to CCS, aggregate 24-hour visits, and construct visit graphs |
+| **Knowledge Pool (§2.2)**           | [`distill.py`](reta/knowledge/distill.py), [`filtering.py`](reta/knowledge/filtering.py), [`clustering.py`](reta/knowledge/clustering.py), [`pool.py`](reta/knowledge/pool.py) | Validate, ground, filter, cluster, and retrieve knowledge templates |
+| **Augmentation Policy (§2.3)**      | [`policy.py`](reta/learning/policy.py), [`runtime.py`](reta/learning/runtime.py), [`rl_train.py`](reta/learning/rl_train.py) | Build policy states, select Soft/Hard/Skip actions, compute paired rewards, and optimize with REINFORCE |
+| **Decoupled Encoding (§2.4)**       | [`model.py`](reta/learning/model.py)                         | Encode semantic and structural views, apply augmentation, fuse both channels, and predict CCS categories |
+| **Two-Stage Training (§2.5)**       | [`warmup.py`](reta/learning/warmup.py), [`rl_train.py`](reta/learning/rl_train.py), [`reta.yaml`](configs/reta.yaml) | Warm up the encoder, then refine the policy and live encoder |
+| **Evaluation (§3)**                 | [`inference.py`](reta/learning/inference.py), [`results/`](results), [`logs/`](logs) | Validate checkpoint contracts, evaluate diagnosis prediction, and store reference results |
 
-### Quickstart
-To run a small end-to-end check:
-- Validate the tiny template artifact in `examples/tiny_templates.jsonl`.
-- Run the dependency-light smoke test:
-```bash
-python tests/smoke_test.py
-```
-- Create tiny data/resources/concepts.csv, inventory.csv, support_edges.csv.
-- Run Knowledge Pool Construction to generate knowledge/templates.jsonl.
-- Run warm-up with a small processed dataset or a small subset of your data.
-- Run inference with --max_patients 10.
+Supporting release contracts live in
+[`reta/knowledge/releases/pool_v1/`](reta/knowledge/releases/pool_v1), and the
+test suite is in [`tests/`](tests).
 
-### Installation
+## Quick Start
+
+### Install
+
+ReTA supports Python 3.10 and 3.11. Dependencies are pinned in
+[`requirements.txt`](requirements.txt), including PyTorch 2.1.2 and PyTorch
+Geometric 2.4.0.
 
 ```bash
 git clone https://github.com/ChenC2002/ReTA.git
 cd ReTA
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+python -m pip install -e .
 ```
 
-Validate the bundled knowledge-pool specification, the minimal pool example,
-and the repository test suite without clinical data:
+### Validate
+
+The repository includes a versioned pool specification and a one-template,
+four-dimensional example for validation only:
 
 ```bash
 reta validate-pool-release
 reta validate-template-pool \
   --templates_jsonl examples/tiny_templates.jsonl \
   --expected_dim 4
+python tests/test_smoke.py
+```
+
+Run the full test suite with:
+
+```bash
 python -m unittest discover -s tests -p 'test*.py'
 ```
 
-### Results and log
+The tiny template validates artifact contracts but cannot train the default
+256-dimensional model.
 
-The paper's reported numeric results are versioned in two synchronized
-formats:
+## Required Inputs
 
-- `results/paper_results.json` is the canonical structured result set. It
-  includes the paper title, protocol, dataset statistics, hyperparameters,
-  compute profile, and records spanning the main tasks, transfer,
-  ablations, robustness, efficiency, policy behavior, knowledge diagnostics,
-  sensitivity, calibration, training stability, and reward analysis.
-- `logs/paper_results.jsonl` is the line-oriented result log. It starts
-  with manifest and protocol events, contains one event for every canonical
-  result record, and ends with a completion event.
+Clinical data and third-party biomedical resources are not redistributed. Full
+runs require credentialed MIMIC-III or MIMIC-IV diagnosis data, ICD-to-CCS
+mappings, a CCS hierarchy, PrimeKG or UMLS-derived resources, and externally
+generated concept-level distillation responses. Obtain each resource directly
+from its provider and follow the applicable access and license terms.
 
-Record IDs are identical across both files, making the JSON convenient for
-analysis and the JSONL convenient for streaming or indexing.
+### EHR Files
 
-## Pipeline
+| Input                   | Required format                                              |
+| ----------------------- | ------------------------------------------------------------ |
+| Diagnosis events        | CSV with `patient_id,timestamp,icd_code`; add `icd_version` for mixed ICD-9/10 data |
+| ICD-to-CCS mapping      | CSV with `icd,ccs`; add `icd_version` for a versioned mapping |
+| Preprocessing hierarchy | CSV with `child,parent`                                      |
 
-The runnable path below implements the paper's main multi-label CCS diagnosis
-task. The result and log files above also cover the paper's mortality,
-readmission, transfer, and analysis results.
+### Knowledge Files
 
-### 1. Prepare trajectories
+| Input                  | Required format                                              |
+| ---------------------- | ------------------------------------------------------------ |
+| Concept inventory      | CSV with `concept_id,concept_name` and optional `density` (`sparse`, `moderate`, or `dense`) |
+| Distillation responses | JSONL with exactly `definition` and `clinical_cascade`, one response per concept in matching row order |
+| Biomedical inventory   | CSV with `entity_id,name` and optional `source`              |
+| Embedding candidates   | Optional CSV/JSONL with `mention,entity_id,score`            |
+| PrimeKG support        | CSV with `u,v` and optional `relation`                       |
+| CCS filtering support  | CSV with `parent,child`                                      |
 
-Create `data/raw/diagnoses.csv` with one diagnosis code per row. `timestamp`
-must identify the admission time used to order and combine visits:
+The preprocessing and filtering hierarchy files use opposite column orders.
+Do not reuse one file for both stages without reorienting its columns.
 
-- `patient_id`
-- `timestamp`
-- `icd_code`
+## Diagnosis Workflow
 
-For a single ICD version, provide:
+### Step 1: Preprocess
 
-- `data/resources/icd_to_ccs.csv` with `icd,ccs`
-- `data/resources/ccs_hierarchy.csv` with `child,parent`
+The preprocessor treats `timestamp` as an event time and creates fixed 24-hour
+windows anchored at each patient's first valid event.
 
 ```bash
 python -m reta.data.preprocess \
@@ -112,22 +115,28 @@ python -m reta.data.preprocess \
   --h_anc 2
 ```
 
-Mixed ICD-9/10 data must include a version column in both the event and mapping
-files. Add `--icd_version_col icd_version` and
-`--mapping_icd_version_col icd_version`; version-qualified codes remain
-distinct even when their text is identical.
+For mixed ICD-9/10 input, include an `icd_version` column in both files and
+append `--icd_version_col icd_version` and
+`--mapping_icd_version_col icd_version` to the command.
 
-Preprocessing writes `data/processed/processed.pt` and a deterministic,
-patient-disjoint `data/processed/splits.json` (`train`, `val`, and `test`) for
-local runs. The structured paper results retain the paper's fixed temporal
-70/10/20 protocol ordered by discharge time.
+This writes:
 
-### 2. Build the knowledge pool
+- `data/processed/processed.pt`, containing vocabularies and patient
+  trajectories; and
+- `data/processed/splits.json`, containing deterministic, patient-disjoint
+  train/validation/test identifiers.
 
-Use the prompts and schemas in
-[`reta/knowledge/releases/pool_v1`](reta/knowledge/releases/pool_v1) to create
-one structured response per concept, in the same order as `concepts.csv`.
-Build the validated artifacts:
+> **Split note:** preprocessing creates a seeded, patient-disjoint 70/10/20
+> split. It does not reconstruct the paper's discharge-time temporal split, so
+> metrics from the generated split are not directly comparable with the paper.
+
+### Step 2: Build the Pool
+
+The versioned prompts, schemas, thresholds, and pinned model revision are in
+[`reta/knowledge/releases/pool_v1`](reta/knowledge/releases/pool_v1). Generate
+one schema-valid response per concept outside this repository, then validate
+and serialize those responses. The command below performs no LLM request and
+stores no API credentials.
 
 ```bash
 python -m reta.knowledge.distill \
@@ -137,8 +146,7 @@ python -m reta.knowledge.distill \
   --out_jsonl data/knowledge/artifacts.jsonl
 ```
 
-Ground cascade entities and retain only directly supported PrimeKG links or
-CCS ancestor/descendant paths within two levels:
+Ground mentions and retain only externally supported relations:
 
 ```bash
 python -m reta.knowledge.filtering \
@@ -146,15 +154,15 @@ python -m reta.knowledge.filtering \
   --inventory-csv data/resources/inventory.csv \
   --embedding-candidates data/resources/clinicalbert_top1.csv \
   --primekg-edges-csv data/resources/primekg_edges.csv \
-  --ccs-edges-csv data/resources/ccs_hierarchy.csv \
+  --ccs-edges-csv data/resources/ccs_support_edges.csv \
   --out-grounded-jsonl data/knowledge/grounded.jsonl \
   --out-audit-jsonl results/filtering_audit.jsonl \
   --out-summary-json results/filtering_summary.json
 ```
 
-The embedding-candidate CSV is precomputed; filtering performs no model
-download. Cluster the grounded templates with the pinned ClinicalBERT revision
-and validate the resulting retrieval pool:
+Filtering uses precomputed embedding candidates and performs no model download.
+Clustering loads the exact Bio_ClinicalBERT revision recorded in `pool_v1` and
+may download it if it is not already cached:
 
 ```bash
 python -m reta.knowledge.clustering \
@@ -162,7 +170,12 @@ python -m reta.knowledge.clustering \
   --out_jsonl data/knowledge/templates.jsonl \
   --tau 0.16 \
   --projection_dim 256
+```
 
+Validate the pool and assign stable token IDs to external medoid-subgraph nodes
+that are not already in the processed ICD/CCS vocabulary:
+
+```bash
 reta validate-template-pool \
   --templates_jsonl data/knowledge/templates.jsonl \
   --expected_dim 256
@@ -173,14 +186,12 @@ reta build-entity-map \
   --out data/resources/entity_to_token.json
 ```
 
-The generated entity map gives every grounded PrimeKG or UMLS node a stable,
-non-overlapping token ID so Hard Import retains the external subgraph.
+### Step 3: Train
 
-### 3. Train
-
-The default config uses only the patient-level `train` split. Stage 1 warms up
-the encoder; Stage 2 trains the masked augmentation policy and refines the
-encoder on the selected trajectories.
+Review [`configs/reta.yaml`](configs/reta.yaml) before training. Its defaults
+match the main paper settings where implemented, including `K = 20`, model
+dimension 256, two GNN layers, four attention heads, 30 warm-up epochs, and 50
+RL iterations.
 
 ```bash
 python -m reta.learning.warmup --config configs/reta.yaml
@@ -189,40 +200,53 @@ python -m reta.learning.rl_train \
   --warmup_ckpt checkpoints/warmup.pt
 ```
 
-### 4. Evaluate
+Stage 1 writes `checkpoints/warmup.pt`. Stage 2 requires that checkpoint and
+writes `checkpoints/rl_iterN.pt` after every iteration. The training scripts use
+one `torch.device`; multi-GPU and multi-seed orchestration are not included.
 
-Inference derives model settings from the checkpoint, verifies the dataset,
-split, vocabulary, entity mapping, and template-pool fingerprints, and uses
-deterministic policy actions by default.
+### Step 4: Evaluate
+
+Inference checks the processed data, split, template pool, vocabulary, entity
+mapping, and model fingerprints against the checkpoint contract. Greedy policy
+actions are used by default.
 
 ```bash
 python -m reta.learning.inference \
   --checkpoint checkpoints/rl_iter50.pt \
   --processed_path data/processed/processed.pt \
   --templates_jsonl data/knowledge/templates.jsonl \
+  --entity_to_token_json data/resources/entity_to_token.json \
   --split_json data/processed/splits.json \
   --split test \
   --out results/inference.json
 ```
 
-The default inference result contains aggregate metrics only. Optional
-per-sample action metadata uses run-local patient indices rather than source
-patient identifiers.
+Add `--max_patients 10` for a small checkpoint-backed evaluation. Add
+`--include-sample-metadata` to record action metadata keyed by run-local patient
+indices. A Hard Import that cannot attach any new structure is recorded as a
+no-op rather than as a successful structural edit.
 
-### Outputs
+Local inference reports `AUPRC_micro`, `MicroF1@0.5`, and `Acc@20` on the
+`[0, 1]` scale. The released paper artifacts store metrics in percentage
+points.
 
-| Genre | Paths |
-| --- | --- |
-| Paper results | `results/paper_results.json` |
-| Paper result log | `logs/paper_results.jsonl` |
-| Knowledge build | `data/knowledge/{artifacts,grounded,templates}.jsonl` |
-| Training | `checkpoints/warmup.pt`, `checkpoints/rl_iter*.pt` |
-| Local evaluation | `results/inference.json`, `results/filtering_{summary,audit}.*` |
-| Local runtime logs | `logs/warmup.log`, `logs/rl_train.log`, `logs/inference.log` |
+## Outputs
 
-The paper result and result-log files are versioned. Other generated
-clinical-data derivatives, checkpoints, results, and runtime logs are ignored
-by Git. PyTorch serialization is used for `processed.pt`, so load only a
-locally generated or otherwise trusted processed dataset. Checkpoints use
-restricted tensor-only loading and are bound to their exact runtime contracts.
+Paper-reported numbers are included as synchronized reference artifacts in
+[`results/paper_results.json`](results/paper_results.json) and
+[`logs/paper_results.jsonl`](logs/paper_results.jsonl). The runnable pipeline
+does not regenerate every record in these files.
 
+| Output                                       | Path                                                         |
+| -------------------------------------------- | ------------------------------------------------------------ |
+| Paper reference results                      | `results/paper_results.json`, `logs/paper_results.jsonl`     |
+| Distilled, grounded, and clustered knowledge | `data/knowledge/{artifacts,grounded,templates}.jsonl`        |
+| Filtering diagnostics                        | `results/filtering_audit.jsonl`, `results/filtering_summary.json` |
+| Training checkpoints                         | `checkpoints/warmup.pt`, `checkpoints/rl_iter*.pt`           |
+| Local diagnosis evaluation                   | `results/inference.json`                                     |
+| Runtime logs                                 | `logs/warmup.log`, `logs/rl_train.log`, `logs/inference.log` |
+
+Generated clinical-data derivatives, mappings, checkpoints, local results, and
+runtime logs are ignored by Git. `processed.pt` uses PyTorch serialization, so
+load only locally generated or otherwise trusted processed data. Checkpoints
+use restricted tensor-only loading and are bound to their runtime contracts.
