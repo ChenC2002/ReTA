@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import sys
 from dataclasses import asdict, dataclass
 from typing import List, Optional
@@ -47,11 +48,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     validate.add_argument("--templates_jsonl", required=True)
     validate.add_argument("--expected_dim", type=int, default=None)
 
+    release = subparsers.add_parser("validate-pool-release")
+    release.add_argument(
+        "--release-dir",
+        "--release_dir",
+        default=str(Path(__file__).resolve().parents[1] / "artifacts" / "pool_v1"),
+    )
+    release.add_argument("--allow-incomplete", "--allow_incomplete", action="store_true")
+    release.add_argument("--json", action="store_true", dest="as_json")
+
     subparsers.add_parser("show-training-stages")
 
     args = parser.parse_args(argv)
     if args.command == "validate-template-pool":
         return _validate_template_pool(args.templates_jsonl, args.expected_dim)
+    if args.command == "validate-pool-release":
+        return _validate_pool_release(args.release_dir, args.allow_incomplete, args.as_json)
     if args.command == "show-training-stages":
         print(json.dumps([asdict(stage) for stage in default_training_stages()], indent=2))
         return 0
@@ -70,6 +82,20 @@ def _validate_template_pool(path: str, expected_dim: Optional[int]) -> int:
         return 2
     print(f"valid template pool: {len(templates)} templates")
     return 0
+
+
+def _validate_pool_release(path: str, allow_incomplete: bool, as_json: bool) -> int:
+    from artifacts.pool_v1.verify_release import verify_release
+
+    report = verify_release(path)
+    ok = report.ok(allow_incomplete)
+    output = (
+        json.dumps(report.to_dict(allow_incomplete), indent=2, sort_keys=True)
+        if as_json
+        else report.format_text(allow_incomplete)
+    )
+    print(output, file=sys.stdout if ok else sys.stderr)
+    return 0 if ok else 2
 
 
 if __name__ == "__main__":

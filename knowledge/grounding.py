@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import re
+from collections import deque
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -136,7 +137,9 @@ class Inventory:
         sims = (self._emb @ m_emb.T).reshape(-1)
 
         j = int(np.argmax(sims))
-        if float(sims[j]) < tau_map:
+        # The frozen pool_v1 contract follows Appendix B.3 exactly: the
+        # similarity must strictly exceed tau_map, not merely equal it.
+        if float(sims[j]) <= tau_map:
             return None
 
         row = self.df.iloc[j]
@@ -154,6 +157,8 @@ class SupportGraph:
         for u, v in edges:
             self.adj.setdefault(u, []).append(v)
             self.adj.setdefault(v, []).append(u)
+        for node in self.adj:
+            self.adj[node] = sorted(set(self.adj[node]))
 
     @staticmethod
     def from_csv(path: str, u_col: str = "u", v_col: str = "v") -> "SupportGraph":
@@ -171,26 +176,27 @@ class SupportGraph:
     def has_edge(self, u: str, v: str) -> bool:
         return v in self.adj.get(u, [])
 
-    def within_hops(self, u: str, v: str, h: int = 2) -> bool:
+    def shortest_path(self, u: str, v: str, h: int = 2) -> Optional[List[str]]:
+        """Return a deterministic support path without inventing shortcut edges."""
         if u == v:
-            return True
-        if self.has_edge(u, v):
-            return True
-        frontier = {u}
+            return [u]
+        queue = deque([(u, [u])])
         visited = {u}
-        for _ in range(h):
-            nxt = set()
-            for x in frontier:
-                for y in self.adj.get(x, []):
-                    if y == v:
-                        return True
-                    if y not in visited:
-                        visited.add(y)
-                        nxt.add(y)
-            frontier = nxt
-            if not frontier:
-                break
-        return False
+        while queue:
+            node, path = queue.popleft()
+            if len(path) - 1 >= h:
+                continue
+            for neighbor in self.adj.get(node, []):
+                next_path = path + [neighbor]
+                if neighbor == v:
+                    return next_path
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, next_path))
+        return None
+
+    def within_hops(self, u: str, v: str, h: int = 2) -> bool:
+        return self.shortest_path(u, v, h=h) is not None
 
 
 def load_artifacts_jsonl(path: str) -> List[DistilledArtifact]:
@@ -236,23 +242,43 @@ def ground_one(
     # Compact subgraph: root + cascade entities, retaining only externally
     # supported links as in Appendix B.3.
     root = art.concept_id
-    nodes = [root] + [e.entity_id for e in entities]
+    candidate_nodes = [root] + [e.entity_id for e in entities]
+    nodes = list(candidate_nodes)
 
     edges: List[Tuple[str, str]] = []
     if support is not None:
         seen_edges = set()
-        for i in range(len(nodes)):
-            for j in range(i + 1, len(nodes)):
-                u, v = nodes[i], nodes[j]
-                if support.within_hops(u, v, h=2) and (u, v) not in seen_edges:
-                    edges.append((u, v))
-                    seen_edges.add((u, v))
-        supported_ids = {root}
+        for i in range(len(candidate_nodes)):
+            for j in range(i + 1, len(candidate_nodes)):
+                path = support.shortest_path(candidate_nodes[i], candidate_nodes[j], h=2)
+                if path is None:
+                    continue
+                for u, v in zip(path, path[1:]):
+                    key = tuple(sorted((u, v)))
+                    if key not in seen_edges:
+                        edges.append(key)
+                        seen_edges.add(key)
+
+        # Hard Import templates must be connected to the root. A supported
+        # cascade-to-cascade component alone is not sufficient evidence.
+        local_adj: Dict[str, List[str]] = {}
         for u, v in edges:
-            supported_ids.add(u)
-            supported_ids.add(v)
-        entities = [e for e in entities if e.entity_id in supported_ids]
-        nodes = [root] + [e.entity_id for e in entities]
+            local_adj.setdefault(u, []).append(v)
+            local_adj.setdefault(v, []).append(u)
+        root_component = {root}
+        frontier = [root]
+        while frontier:
+            current = frontier.pop()
+            for neighbor in local_adj.get(current, []):
+                if neighbor not in root_component:
+                    root_component.add(neighbor)
+                    frontier.append(neighbor)
+
+        entities = [e for e in entities if e.entity_id in root_component]
+        entity_ids = [e.entity_id for e in entities]
+        intermediate_ids = sorted(root_component.difference({root}, set(entity_ids)))
+        nodes = [root] + entity_ids + intermediate_ids
+        edges = [(u, v) for u, v in edges if u in root_component and v in root_component]
 
     return GroundedTemplate(
         root_concept_id=root,

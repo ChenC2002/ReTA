@@ -8,6 +8,12 @@ data:
   num_workers: 0
 
 knowledge:
+  # Versioned, auditable pool-build contract and release manifest. The release
+  # validator distinguishes the bundled demo from the paper's experimental
+  # pools; never substitute the demo for an experimental pool.
+  frozen_release_dir: artifacts/pool_v1
+  frozen_release_manifest: artifacts/pool_v1/manifest.json
+
   # Final clustered pool produced by:
   # python -m reta.knowledge.clustering --out_jsonl knowledge/templates.jsonl
   templates_jsonl: knowledge/templates.jsonl

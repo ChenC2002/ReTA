@@ -95,6 +95,23 @@ python -m reta.data.preprocess \
 ```
 ### Step 2: Knowledge Pool Construction
 Knowledge pool construction is performed offline and does not use any patient data.
+
+#### Frozen `pool_v1` release
+
+The paper-aligned prompt, configuration, filtering implementation, reported diagnostics, and provenance live in `artifacts/pool_v1/`. Validate the release metadata and bundled demo with:
+
+```bash
+python -m reta.cli validate-pool-release \
+  --release_dir artifacts/pool_v1 \
+  --allow_incomplete
+```
+
+Strict validation omits `--allow_incomplete` and fails until the real experimental JSONL payloads are present. The one-record demo is only a format and tooling fixture; it is not one of the MIMIC-III, MIMIC-IV, or UMLS pools reported in the paper.
+
+See `artifacts/pool_v1/README.md` before rebuilding or publishing a pool. It records which settings come directly from the paper, which were resolved by this release, and which source assets are still unavailable.
+
+#### Rebuild from source assets
+
 1. Distill artifacts (Definition + Cascade)
 ```bash
 python -m reta.knowledge.distill \
@@ -104,18 +121,24 @@ python -m reta.knowledge.distill \
 `concepts.csv` may include an optional `density` column with `sparse`, `moderate`, or `dense`.
 2. Ground and filter
 ```bash
-python -m reta.knowledge.grounding \
-  --artifacts_jsonl knowledge/artifacts.jsonl \
-  --inventory_csv data/resources/inventory.csv \
-  --support_edges_csv data/resources/support_edges.csv \
-  --out_jsonl knowledge/grounded.jsonl
+python artifacts/pool_v1/filtering.py \
+  --artifacts-jsonl knowledge/artifacts.jsonl \
+  --inventory-csv data/resources/inventory.csv \
+  --embedding-candidates data/resources/clinicalbert_top1.csv \
+  --primekg-edges-csv data/resources/primekg_edges.csv \
+  --ccs-edges-csv data/resources/ccs_hierarchy.csv \
+  --out-grounded-jsonl knowledge/grounded.jsonl \
+  --out-audit-jsonl knowledge/filtering_audit.jsonl \
+  --out-summary-json knowledge/filtering_summary.json
 ```
+The optional embedding-candidate file contains the cached ClinicalBERT Top-1 candidate and cosine score for each mention. The frozen filter applies exact matching first, accepts an embedding fallback only when its score is strictly greater than `0.90`, and fails closed unless a direct PrimeKG edge or a CCS ancestor/descendant path of at most two levels supports the relation.
+
 3. Cluster into templates (final pool)
 ```bash
 python -m reta.knowledge.clustering \
   --grounded_jsonl knowledge/grounded.jsonl \
   --out_jsonl knowledge/templates.jsonl \
-  --tau 0.15 \
+  --tau 0.16 \
   --projection_dim 256
 ```
 The final online retrieval pool is:

@@ -1,0 +1,98 @@
+schema_version: "1.0"
+
+release:
+  id: pool_v1
+  version: 1.0.0-incomplete
+  status: incomplete
+  assembled_date: "2026-07-13"
+  contains_experimental_pools: false
+  contains_demo_pool: true
+
+distillation:
+  paper_reported:
+    model_family: GPT-4o
+    model_snapshot: null
+    access_date: null
+    temperature: 0.2
+    top_p: 0.9
+    max_tokens: 256
+    request_mode: independent_per_concept
+    patient_context_included: false
+    system_prompt: prompts/figure8_system.txt
+    user_prompt: prompts/figure8_user.txt
+    response_schema: schemas/llm_response.schema.json
+    density_labels:
+      - sparse
+      - moderate
+      - dense
+    density_numeric_boundaries: null
+    cascade_min_items: 1
+    cascade_max_items: 5
+  thread_declared_post_hoc:
+    scope: claimed_historical_run_metadata
+    model_snapshot: gpt-4o-2024-11-20
+    access_date: "2026-07-13"
+    verification: unverified
+    evidence_in_repository: false
+    evidence_in_api_logs: false
+    reported_by_paper: false
+    applies_to_demo_pool: false
+
+grounding:
+  paper_reported:
+    exact_match_first: true
+    fallback_embedder: ClinicalBERT
+    fallback_embedder_checkpoint: null
+    fallback_embedder_revision: null
+    top_1_similarity_threshold: 0.90
+    threshold_comparison: greater_than
+  current_code_default_model: emilyalsentzer/Bio_ClinicalBERT
+
+filtering:
+  paper_reported:
+    accept_direct_primekg_edge: true
+    accept_ccs_ancestor_descendant_relation: true
+    ccs_hierarchy_max_levels: 2
+    primekg_neighborhood_max_hops: null
+  audit_output: filtering_audit.jsonl
+  summary_output: filtering_summary.json
+
+clustering:
+  paper_reported:
+    algorithm: agglomerative
+    distance: cosine
+    distance_cut_tau: null
+    linkage: null
+    embedder: ClinicalBERT
+    projection_dim: 256
+  release_resolved:
+    distance_cut_tau: 0.16
+    basis: inferred_from_figure_9_zero_delta_default
+    verification: inferred_not_explicitly_reported
+  current_code_defaults:
+    model_name: emilyalsentzer/Bio_ClinicalBERT
+    distance_cut_tau: 0.16
+    projection_dim: 256
+    random_state_for_svd: 0
+
+pools:
+  demo:
+    path: demo/templates.jsonl
+    source: ../../examples/tiny_templates.jsonl
+    intended_for_experiments: false
+  mimic_iii_primekg:
+    path: pools/mimic_iii_primekg.templates.jsonl
+    included: false
+    paper_reported_templates: 920
+  mimic_iv_primekg:
+    path: pools/mimic_iv_primekg.templates.jsonl
+    included: false
+    paper_reported_templates: 1180
+  mimic_iii_umls:
+    path: pools/mimic_iii_umls.templates.jsonl
+    included: false
+    paper_reported_templates: 874
+  mimic_iv_umls:
+    path: pools/mimic_iv_umls.templates.jsonl
+    included: false
+    paper_reported_templates: 1092
