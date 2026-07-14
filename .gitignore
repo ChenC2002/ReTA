@@ -3,15 +3,42 @@ __pycache__/
 *.pyo
 .DS_Store
 
+# Local credentials and signing material
+.env
+.env.*
+!.env.example
+!.env.template
+.secrets/
+secrets/
+credentials/
+.netrc
+.npmrc
+.pypirc
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+
 .venv/
 venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+tmp/
 
 data/raw/
 data/processed/
 data/resources/
-knowledge/artifacts.jsonl
-knowledge/grounded.jsonl
-knowledge/templates.jsonl
+data/knowledge/
 checkpoints/
-results/
-runs/
+results/*
+!results/paper_results.json
+logs/*
+!logs/paper_results.jsonl

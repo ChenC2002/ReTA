@@ -1,2 +1,0 @@
-"""Versioned, frozen research artifacts."""
-

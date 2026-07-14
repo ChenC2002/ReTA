@@ -3,31 +3,31 @@ data:
   # python -m reta.data.preprocess --out_dir data/processed
   processed_path: data/processed/processed.pt
 
+  # Patient-level split manifest written by preprocessing. Training is limited
+  # to the named split to prevent validation/test leakage.
+  split_json: data/processed/splits.json
+  train_split: train
+
   # Stage 1 uses this many sequential transitions per optimizer step
   batch_size: 32
-  num_workers: 0
 
 knowledge:
-  # Versioned, auditable pool-build contract and release manifest. The release
-  # validator distinguishes the bundled demo from the paper's experimental
-  # pools; never substitute the demo for an experimental pool.
-  frozen_release_dir: artifacts/pool_v1
-  frozen_release_manifest: artifacts/pool_v1/manifest.json
-
   # Final clustered pool produced by:
-  # python -m reta.knowledge.clustering --out_jsonl knowledge/templates.jsonl
-  templates_jsonl: knowledge/templates.jsonl
+  # python -m reta.knowledge.clustering --out_jsonl data/knowledge/templates.jsonl
+  templates_jsonl: data/knowledge/templates.jsonl
 
   # Retrieval Top-K per visit (action space size = 2K + 1 with Skip)
   retrieval_K: 20
 
   # Eq. 1 history-aware retrieval weight alpha
-  retrieval_alpha: 0.2
+  retrieval_alpha: 0.3
 
-  # Optional: mapping external KG ids -> token ids for Hard Import.
-  # ICD:/CCS: ids are read from processed.pt; unmapped external ids are skipped.
-  # JSON format: {"UMLS:Cxxxxxx": 12345, ...}
-  entity_to_token_json: null
+  # Mapping external KG ids -> token ids used by Hard Import. Generate this
+  # file with `reta build-entity-map` after clustering the template pool.
+  # ICD:/CCS: ids are read from processed.pt.
+  # External token ids must be unique and contiguous, starting at
+  # icd_vocab_size + ccs_vocab_size from processed.pt.
+  entity_to_token_json: data/resources/entity_to_token.json
 
 model:
   # Embedding/hidden dimension (default 256)
@@ -42,17 +42,21 @@ model:
   # Dropout used in encoders/predictor
   dropout: 0.3
 
+outputs:
+  checkpoints_dir: checkpoints
+  logs_dir: logs
+
 train:
   # Reproducibility
   seed: 42
 
   # Device string for torch.device()
-  device: cuda
+  device: auto
 
   # Optimizer
   lr: 1e-4
   weight_decay: 1e-5
-  grad_clip: 1.0
+  grad_clip: 0.5
 
   # -------------------------
   # Stage 1: Warm-up

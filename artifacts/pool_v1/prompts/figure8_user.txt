@@ -1,8 +1,0 @@
-Diagnosis: <concept description>
-PrimeKG neighborhood density:
-<sparse | moderate | dense>
-
-Output Constraints
-1. Definition (for Soft Import): one sentence focusing on pathology.
-2. Clinical Cascade (for Hard Import): {1–5} downstream complications
-(sparse neighborhoods → up to 5, dense → as few as 1).
