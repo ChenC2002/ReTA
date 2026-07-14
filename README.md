@@ -44,7 +44,6 @@ python tests/smoke_test.py
 
 ## Run
 ### Installation
-=======
 
 ```bash
 git clone https://github.com/ChenC2002/ReTA.git
