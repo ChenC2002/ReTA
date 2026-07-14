@@ -64,11 +64,9 @@ python -m unittest discover -s tests -p 'test*.py'
 
 ## Required Inputs
 
-Clinical data and third-party biomedical resources are not redistributed. Full
-runs require credentialed MIMIC-III or MIMIC-IV diagnosis data, ICD-to-CCS
+Full runs require credentialed MIMIC-III or MIMIC-IV diagnosis data, ICD-to-CCS
 mappings, a CCS hierarchy, PrimeKG or UMLS-derived resources, and externally
-generated concept-level distillation responses. Obtain each resource directly
-from its provider and follow the applicable access and license terms.
+generated concept-level distillation responses. 
 
 ### EHR Files
 
