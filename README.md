@@ -13,11 +13,6 @@ and 30-day readmission on MIMIC-III and MIMIC-IV. This repository includes the
 paper-wide numeric results and ordered result log, together with the runnable
 implementation of the main next-visit diagnosis workflow.
 
-## Quickstart
-
-ReTA supports Python 3.10 and 3.11.
-
-<<<<<<< HEAD
 | Method component | Code path | Role |
 | --- | --- | --- |
 | Visit construction | `data.preprocess`, `data.ontology` | Aggregates diagnoses into 24-hour visits, maps ICD to CCS, and builds visit graphs with CCS ancestors. |
