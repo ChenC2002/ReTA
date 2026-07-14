@@ -191,8 +191,7 @@ one `torch.device`; multi-GPU and multi-seed orchestration are not included.
 ### Step 4: Evaluate
 
 Inference checks the processed data, split, template pool, vocabulary, entity
-mapping, and model fingerprints against the checkpoint contract. Greedy policy
-actions are used by default.
+mapping, and model fingerprints against the checkpoint contract.
 
 ```bash
 python -m reta.learning.inference \
@@ -211,8 +210,7 @@ indices. A Hard Import that cannot attach any new structure is recorded as a
 no-op rather than as a successful structural edit.
 
 Local inference reports `AUPRC_micro`, `MicroF1@0.5`, and `Acc@20` on the
-`[0, 1]` scale. The released paper artifacts store metrics in percentage
-points.
+`[0, 1]` scale. 
 
 ## Outputs
 
