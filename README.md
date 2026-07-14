@@ -42,10 +42,10 @@ python tests/smoke_test.py
 - Run inference with --max_patients 10.
 
 
-## Running
+## Run
 ### Installation
 =======
->>>>>>> f7c6842 (Finalize paper-matched ReTA release)
+
 ```bash
 git clone https://github.com/ChenC2002/ReTA.git
 cd ReTA
