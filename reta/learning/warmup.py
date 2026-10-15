@@ -61,6 +61,7 @@ def main():
         split_json=cfg.data.split_json,
         split=training_split,
     )
+    sampler.filter_trainable_patients()
     logger.info(f"training split={training_split} patients={len(sampler.patient_ids)}")
 
     pool = KnowledgePool.load_jsonl(cfg.knowledge.templates_jsonl)
@@ -162,7 +163,7 @@ def main():
             for parameter in list(encoder.parameters()) + list(predictor.parameters()):
                 if parameter.grad is not None:
                     parameter.grad.mul_(float(gradient_scale))
-        torch.nn.utils.clip_grad_norm_(list(encoder.parameters()) + list(predictor.parameters()), cfg.train.grad_clip)
+        torch.nn.utils.clip_grad_norm_(list(encoder.parameters()) + list(predictor.parameters()), cfg.train.grad_clip, error_if_nonfinite=True)
         opt.step()
         opt.zero_grad(set_to_none=True)
 
@@ -227,6 +228,8 @@ def main():
                 ).view(1, -1)
 
                 loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, y)
+                if not torch.isfinite(loss):
+                    raise RuntimeError("Non-finite warm-up loss; optimizer step aborted.")
                 (loss / update_every).backward()
                 accum += 1
                 past_visit_embs.append(h_G[0].detach())

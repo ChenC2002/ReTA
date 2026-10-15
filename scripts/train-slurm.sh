@@ -6,7 +6,7 @@
 #SBATCH --time=12:00:00
 #SBATCH --array=0-4%2
 # Submit from the repository root with the desired Python environment activated:
-# RETA_CONFIG=configs/reta.yaml sbatch -p zyao scripts/train-slurm.sh
+# RETA_CONFIG=configs/reta.yaml sbatch -p YOUR_GPU_PARTITION scripts/train-slurm.sh
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:?Submit using sbatch from the repository root}"
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"
@@ -33,3 +33,7 @@ PY
 )
 python -m reta.learning.warmup --config "$run_config"
 python -m reta.learning.rl_train --config "$run_config"
+run_dir=$(dirname "$run_config")
+python -m reta.learning.select_checkpoint --config "$run_config" \
+  --checkpoints "$run_dir"/checkpoints/rl_iter*.pt \
+  --out "$run_dir/checkpoints/best.pt" --report "$run_dir/selection.json"

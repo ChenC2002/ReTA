@@ -45,3 +45,4 @@ logs/*
 
 # Isolated multi-seed training outputs
 runs/
+slurm-*.out
