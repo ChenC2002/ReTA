@@ -256,13 +256,3 @@ Paper-reported numbers are included as synchronized reference artifacts in
 | Local diagnosis evaluation                   | `results/inference.json`                                     |
 | Runtime logs                                 | `logs/warmup.log`, `logs/rl_train.log`, `logs/inference.log` |
 
-## Release scope
-
-This repository includes source, tests, pool-building specifications, and a tiny
-example. It does **not** include credentialed clinical datasets, the complete
-frozen knowledge pool, or trained paper checkpoints. Files under `results/` and
-`logs/` contain paper-reported references, not reproduced runs.
-
-The executable task is next-visit diagnosis prediction. Mortality/readmission
-experiments and full paper reproduction remain outside the implemented pipeline.
-[Validation notes](docs/validation.md) describe the checks and their limits.
