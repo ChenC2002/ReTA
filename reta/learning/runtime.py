@@ -215,6 +215,8 @@ def validate_config(cfg: Config) -> None:
 
     if not isinstance(cfg.train.seed, int) or isinstance(cfg.train.seed, bool):
         raise ValueError("train.seed must be an integer.")
+    if not 0 <= cfg.train.seed < 2**32:
+        raise ValueError("train.seed must be in [0, 2**32).")
     if not isinstance(cfg.train.device, str) or not cfg.train.device.strip():
         raise ValueError("train.device must be a non-empty device string.")
     require_number("train.lr", cfg.train.lr, minimum=1e-300)
@@ -894,6 +896,18 @@ class TrajectorySampler:
         )
         if not self.patient_ids:
             raise ValueError(f"no patients are available for split {split!r}.")
+
+    def filter_trainable_patients(self, max_visits: Optional[int] = None) -> None:
+        """Exclude trajectories with no labeled next-visit transition before sampling."""
+        eligible = []
+        for pid in self.patient_ids:
+            traj = self.get_patient_traj(pid)
+            end = min(len(traj), max_visits) if max_visits is not None else len(traj)
+            if any(visit.get("label_ccs") is not None for visit in traj[:max(0, end - 1)]):
+                eligible.append(pid)
+        if not eligible:
+            raise ValueError("Training split contains no labeled next-visit transitions.")
+        self.patient_ids = eligible
 
     def sample_patients(self, n: int) -> List[str]:
         n = min(int(n), len(self.patient_ids))

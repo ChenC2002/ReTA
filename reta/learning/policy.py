@@ -424,8 +424,10 @@ class ReinforceTrainer:
         loss = loss_policy + float(self.cfg.entropy_coef) * loss_entropy
 
         self.opt.zero_grad(set_to_none=True)
+        if not torch.isfinite(loss):
+            raise RuntimeError("Non-finite policy loss; optimizer step aborted.")
         loss.backward()
-        nn.utils.clip_grad_norm_(self.params, self.cfg.max_grad_norm)
+        nn.utils.clip_grad_norm_(self.params, self.cfg.max_grad_norm, error_if_nonfinite=True)
         self.opt.step()
 
         return {

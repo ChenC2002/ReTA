@@ -93,6 +93,7 @@ def main():
         split_json=cfg.data.split_json,
         split=training_split,
     )
+    sampler.filter_trainable_patients(cfg.train.max_visits_per_patient)
     logger.info(f"training split={training_split} patients={len(sampler.patient_ids)}")
     icd_vocab_size = int(sampler.meta["icd_vocab_size"])
     ccs_vocab_size = int(sampler.meta["ccs_vocab_size"])
@@ -404,6 +405,8 @@ def main():
                 logits = predictor(h_G)
                 target = torch.cat([labels(tokens) for tokens in targets], dim=0)
                 loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, target)
+                if not torch.isfinite(loss):
+                    raise RuntimeError("Non-finite refinement loss; optimizer step aborted.")
                 loss.backward()
                 total_loss += float(loss.item()) * len(batch)
                 total_samples += len(batch)
@@ -411,6 +414,7 @@ def main():
                 torch.nn.utils.clip_grad_norm_(
                     list(encoder.parameters()) + list(predictor.parameters()),
                     cfg.train.grad_clip,
+                    error_if_nonfinite=True,
                 )
                 enc_opt.step()
             sup_loss = total_loss / total_samples

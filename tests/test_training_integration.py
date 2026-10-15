@@ -100,7 +100,16 @@ class TrainingIntegrationTests(unittest.TestCase):
             for key in full_rl["template_utilities"]:
                 self.assertAlmostEqual(full_rl["template_utilities"][key], resumed["template_utilities"][key], places=5)
             self.assertEqual(resumed["training_state"]["completed"], 2)
-            with mock.patch.object(sys, "argv", ["inference", "--checkpoint", str(root / "resumed/rl_iter2.pt"),
+            from reta.learning.select_checkpoint import select_checkpoint
+            selection = select_checkpoint(
+                [root / "resumed/rl_iter1.pt", root / "resumed/rl_iter2.pt"], cfg,
+                root / "resumed/best.pt", root / "selection.json",
+            )
+            self.assertEqual(selection["selection"]["split"], "val")
+            scores = [record["metrics"]["AUPRC_micro"] for record in selection["candidates"]]
+            self.assertEqual(selection["selection"]["score"], max(scores))
+            self.assertEqual(load_checkpoint(root / "resumed/best.pt")["selection"], selection["selection"])
+            with mock.patch.object(sys, "argv", ["inference", "--checkpoint", str(root / "resumed/best.pt"),
                                    "--processed_path", cfg.data.processed_path,
                                    "--templates_jsonl", cfg.knowledge.templates_jsonl,
                                    "--split_json", cfg.data.split_json,
