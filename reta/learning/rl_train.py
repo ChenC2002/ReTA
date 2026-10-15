@@ -37,6 +37,8 @@ from .model import (
     graft_hard_import,
     labels_to_multihot_from_ccs_tokens,
 )
+from .checkpointing import atomic_save, training_state, restore_rng, validate_resume
+
 from .policy import (
     HARD,
     SOFT,
@@ -59,6 +61,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Stage 2 REINFORCE training for ReTA policy.")
     p.add_argument("--config", type=str, default=None)
     p.add_argument("--warmup_ckpt", type=str, default=None)
+    p.add_argument("--resume", type=str, default=None, help="Resume an iteration-boundary checkpoint")
     return p
 
 
@@ -80,7 +83,7 @@ def main():
     logger = setup_logger(cfg.outputs.logs_dir, name="rl_train")
     set_seed(cfg.train.seed)
     device = resolve_device(cfg.train.device)
-    warmup_checkpoint = args.warmup_ckpt or os.path.join(
+    warmup_checkpoint = args.resume or args.warmup_ckpt or os.path.join(
         cfg.outputs.checkpoints_dir, "warmup.pt"
     )
 
@@ -146,7 +149,7 @@ def main():
         )
     code_embed_lookup = encoder_code_embedding_lookup(encoder)
 
-    # Frozen Stage-1 baseline for L_CE(G_raw) and uncertainty u_t.
+    # Frozen Stage-1 model supplies uncertainty only; reward uses the live encoder.
     baseline_encoder = copy.deepcopy(encoder).to(device).eval()
     baseline_predictor = copy.deepcopy(predictor).to(device).eval()
     for p in list(baseline_encoder.parameters()) + list(baseline_predictor.parameters()):
@@ -205,7 +208,22 @@ def main():
         loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, labels(y_tokens))
         return logits, loss, h_G
 
-    for it in range(cfg.train.rl_iters):
+    start_iter = 0
+    if args.resume:
+        state = validate_resume(ck, cfg, "rl")
+        for name, module in (("baseline_encoder", baseline_encoder),
+                             ("baseline_predictor", baseline_predictor),
+                             ("policy", policy_net), ("state_encoder", state_enc)):
+            load_state_dict_strict(module, ck[name], name)
+        enc_opt.load_state_dict(state["optimizers"]["encoder"])
+        reinforce.opt.load_state_dict(state["optimizers"]["policy"])
+        reinforce.baseline.value = state["baseline_value"]
+        reinforce.baseline.initialized = state["baseline_initialized"]
+        utility_tracker.values = dict(ck["template_utilities"])
+        start_iter = state["completed"]
+        restore_rng(state["rng"])
+
+    for it in range(start_iter, cfg.train.rl_iters):
         buffer = ReinforceBuffer()
         stored_transitions = []
         action_counts = {"soft": 0, "hard": 0, "skip": 0}
@@ -248,10 +266,10 @@ def main():
                 )
 
                 with torch.no_grad():
-                    _, _, h_G_current_raw = forward_logits_loss(
+                    _, current_loss_raw, h_G_current_raw = forward_logits_loss(
                         encoder, predictor, g_raw, None, y_tokens, mem, train_mode=False
                     )
-                    base_logits, base_loss_raw, h_G_base = forward_logits_loss(
+                    base_logits, _, h_G_base = forward_logits_loss(
                         baseline_encoder, baseline_predictor, g_raw, None, y_tokens, base_mem, train_mode=False
                     )
                     base_prob = torch.sigmoid(base_logits)
@@ -319,7 +337,7 @@ def main():
                 with torch.no_grad():
                     _, loss_edit, h_G_aug = forward_logits_loss(encoder, predictor, g_aug, soft_vec, y_tokens, mem, train_mode=False)
                     reward = compute_paired_reward(
-                        base_loss_raw,
+                        current_loss_raw,
                         loss_edit,
                         is_hard=(act.mode == HARD and not effective_skip),
                         is_skip=effective_skip,
@@ -365,22 +383,30 @@ def main():
                     batch.append(stored_transitions[cursor])
                     cursor += 1
 
-                for g_aug, soft_vec, past_memory, y_tokens in batch:
-                    g_aug = g_aug.to(device)
-                    soft_vec = soft_vec.to(device) if soft_vec is not None else None
-                    past_memory = past_memory.to(device)
-                    _, loss, _ = forward_logits_loss(
-                        encoder,
-                        predictor,
-                        g_aug,
-                        soft_vec,
-                        y_tokens,
-                        [past_memory],
-                        train_mode=True,
-                    )
-                    (loss / len(batch)).backward()
-                    total_loss += float(loss.item())
-                    total_samples += 1
+                from torch_geometric.data import Batch
+
+                encoder.train()
+                predictor.train()
+                graphs, soft_vectors, memories, targets = zip(*batch)
+                bg = Batch.from_data_list(list(graphs)).to(device)
+                soft_mask = torch.tensor([v is not None for v in soft_vectors], device=device)
+                offsets = torch.stack([
+                    v if v is not None else torch.zeros(cfg.model.dim)
+                    for v in soft_vectors
+                ]).to(device)
+                h_G, _ = encoder(
+                    bg,
+                    past_visit_memory=[memory.to(device) for memory in memories],
+                    soft_offset_per_graph=offsets,
+                    soft_import_mask=soft_mask,
+                    xi=cfg.train.soft_xi,
+                )
+                logits = predictor(h_G)
+                target = torch.cat([labels(tokens) for tokens in targets], dim=0)
+                loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, target)
+                loss.backward()
+                total_loss += float(loss.item()) * len(batch)
+                total_samples += len(batch)
 
                 torch.nn.utils.clip_grad_norm_(
                     list(encoder.parameters()) + list(predictor.parameters()),
@@ -402,7 +428,7 @@ def main():
 
         os.makedirs(cfg.outputs.checkpoints_dir, exist_ok=True)
         checkpoint_path = os.path.join(cfg.outputs.checkpoints_dir, f"rl_iter{it+1}.pt")
-        torch.save(
+        atomic_save(
             {
                 "encoder": encoder.state_dict(),
                 "predictor": predictor.state_dict(),
@@ -415,6 +441,11 @@ def main():
                 "template_utilities": utility_tracker.values,
                 "cfg": asdict(cfg),
                 "contract": contract,
+                "training_state": training_state(
+                    "rl", it + 1, {"encoder": enc_opt, "policy": reinforce.opt},
+                    baseline_value=reinforce.baseline.value,
+                    baseline_initialized=reinforce.baseline.initialized,
+                ),
             },
             checkpoint_path,
         )

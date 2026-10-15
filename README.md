@@ -32,15 +32,16 @@ test suite is in [`tests/`](tests).
 
 ### Install
 
-Dependencies are pinned in
-[`requirements.txt`](requirements.txt).
+The original reproduction dependencies are pinned in
+[`requirements.txt`](requirements.txt) (Python 3.10/3.11). For Blackwell GPUs,
+use the separate CUDA profile described below.
 
 ```bash
 git clone https://github.com/ChenC2002/ReTA.git
 cd ReTA
 python3.11 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e .
+python -m pip install -r requirements.txt -e .
 ```
 
 ### Validate
@@ -185,8 +186,33 @@ python -m reta.learning.rl_train \
 ```
 
 Stage 1 writes `checkpoints/warmup.pt`. Stage 2 requires that checkpoint and
-writes `checkpoints/rl_iterN.pt` after every iteration. The training scripts use
-one `torch.device`; multi-GPU and multi-seed orchestration are not included.
+writes `checkpoints/rl_iterN.pt` after every iteration. Stage 1 saves after each
+epoch. Both stages save optimizer and RNG state for boundary-level recovery:
+
+```bash
+python -m reta.learning.warmup --config configs/reta.yaml --resume checkpoints/warmup.pt
+python -m reta.learning.rl_train --config configs/reta.yaml --resume checkpoints/rl_iter10.pt
+```
+
+Keep the original configuration; increasing the total epochs/iterations and
+changing output directories is supported. Legacy weight-only checkpoints remain
+valid for inference but cannot resume training. Stage-2 rewards compare raw and
+edited visits under the same live encoder; the frozen Stage-1 model supplies
+uncertainty only. This corrects older training behavior and requires retraining
+to measure its effect.
+
+Stage-2 supervised refinement uses real PyG graph minibatches with per-graph
+history and Soft Import masks. Stage-1 transitions and policy rollouts remain
+sequential. Each job uses one device. For independent seeds on Slurm, activate
+your environment and submit from the repository root:
+
+```bash
+RETA_CONFIG=configs/reta.yaml sbatch -p zyao scripts/train-slurm.sh
+```
+
+The array runs five seeds with at most two concurrent jobs and unique output
+paths. Choose the partition and resource limits for your cluster; this is
+independent-seed parallelism, not DDP.
 
 ### Step 4: Evaluate
 
@@ -227,3 +253,27 @@ Paper-reported numbers are included as synchronized reference artifacts in
 | Local diagnosis evaluation                   | `results/inference.json`                                     |
 | Runtime logs                                 | `logs/warmup.log`, `logs/rl_train.log`, `logs/inference.log` |
 
+
+## CUDA profile and engineering review
+
+The original Torch 2.1.2 pin does not target Blackwell. The separate
+[`requirements-cuda.txt`](requirements-cuda.txt) records the modern direct
+dependencies used for this review's core training tests. Use Python 3.13 in an
+isolated environment. For a compatible driver, install the CUDA 13.0 Torch
+wheel explicitly, then the remaining dependencies and package:
+
+```bash
+python -m pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu130
+python -m pip install -r requirements-cuda.txt -e .
+python -m unittest discover -s tests -p 'test*.py'
+RETA_TEST_DEVICE=cuda python -m unittest discover -s tests -p 'test_training*.py'
+```
+
+Package metadata uses compatibility bounds from `requirements-base.txt`;
+experiment profiles pin direct dependencies. Intermediate versions inside those
+bounds have not all been tested. Do not apply this profile to a shared environment. Full ClinicalBERT pool generation and clinical performance
+are separate validation gates; synthetic tests do not reproduce paper results.
+
+See the [engineering review](docs/engineering-review.md) for three architecture
+options, source-backed trade-offs, findings and remaining evidence gaps, and the
+[validation record](docs/validation.md) for actual test outcomes.

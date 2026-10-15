@@ -36,11 +36,14 @@ from .model import (
     labels_to_multihot_from_ccs_tokens,
 )
 from .policy import HARD, SOFT, decode_action
+from .checkpointing import atomic_save, training_state, restore_rng, validate_resume
+from .runtime import load_checkpoint, require_checkpoint_contract, load_state_dict_strict
 
 
 def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Stage 1 warm-up training for encoder.")
     p.add_argument("--config", type=str, default=None)
+    p.add_argument("--resume", type=str, default=None, help="Resume an epoch-boundary checkpoint")
     return p
 
 
@@ -163,7 +166,18 @@ def main():
         opt.step()
         opt.zero_grad(set_to_none=True)
 
-    for epoch in range(cfg.train.warmup_epochs):
+    start_epoch = 0
+    if args.resume:
+        ck = load_checkpoint(args.resume)
+        require_checkpoint_contract(ck, contract)
+        state = validate_resume(ck, cfg, "warmup")
+        load_state_dict_strict(encoder, ck["encoder"], "encoder")
+        load_state_dict_strict(predictor, ck["predictor"], "predictor")
+        opt.load_state_dict(state["optimizers"]["encoder"])
+        start_epoch = state["completed"]
+        restore_rng(state["rng"])
+
+    for epoch in range(start_epoch, cfg.train.warmup_epochs):
         encoder.train()
         predictor.train()
         running, steps = 0.0, 0
@@ -232,18 +246,18 @@ def main():
             f"loss={running/max(steps,1):.4f}"
         )
 
-    os.makedirs(cfg.outputs.checkpoints_dir, exist_ok=True)
-    checkpoint_path = os.path.join(cfg.outputs.checkpoints_dir, "warmup.pt")
-    torch.save(
-        {
-            "encoder": encoder.state_dict(),
-            "predictor": predictor.state_dict(),
-            "cfg": asdict(cfg),
-            "contract": contract,
-        },
-        checkpoint_path,
-    )
-    logger.info(f"saved {checkpoint_path}")
+        checkpoint_path = os.path.join(cfg.outputs.checkpoints_dir, "warmup.pt")
+        atomic_save(
+            {
+                "encoder": encoder.state_dict(),
+                "predictor": predictor.state_dict(),
+                "cfg": asdict(cfg),
+                "contract": contract,
+                "training_state": training_state("warmup", epoch + 1, {"encoder": opt}),
+            },
+            checkpoint_path,
+        )
+        logger.info(f"saved {checkpoint_path}")
 
 
 if __name__ == "__main__":
