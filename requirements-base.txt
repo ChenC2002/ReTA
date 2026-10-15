@@ -1,0 +1,9 @@
+# Package compatibility bounds. Use a pinned requirements profile for experiments.
+numpy>=1.26.4,<3
+pandas>=2.1.4,<4
+scikit-learn>=1.3.2,<2
+torch>=2.1.2,<2.14
+torch-geometric>=2.4.0,<3
+transformers>=4.36.2,<6
+pyyaml>=6.0.1,<7
+loguru>=0.7.2,<0.8

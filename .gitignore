@@ -42,3 +42,6 @@ results/*
 !results/paper_results.json
 logs/*
 !logs/paper_results.jsonl
+
+# Isolated multi-seed training outputs
+runs/

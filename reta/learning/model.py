@@ -130,14 +130,8 @@ class SemanticEncoder(nn.Module):
         h2 = self.ffn(x_dense)
         x_dense = self.ln2(x_dense + h2)
 
-        h_sem = torch.zeros_like(x)
-        batch_size = x_dense.size(0)
-        for graph_index in range(batch_size):
-            idx = (batch == graph_index).nonzero(as_tuple=False).view(-1)
-            graph_length = int(mask[graph_index].sum().item())
-            h_sem[idx] = x_dense[graph_index, :graph_length]
-
-        h_sem[~code_mask] = 0.0
+        # PyG batches store each graph contiguously, matching the dense mask order.
+        h_sem = x_dense[mask].masked_fill(~code_mask.unsqueeze(-1), 0.0)
         return h_sem
 
 
@@ -333,6 +327,7 @@ class DecoupledMultiGATEncoder(nn.Module):
         past_visit_memory: Optional[List[torch.Tensor]] = None,
         soft_offset_per_graph: Optional[torch.Tensor] = None,
         xi: float = 0.5,
+        soft_import_mask: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return pooled visit embeddings and fused node embeddings."""
         _require_pyg_batch()
@@ -359,12 +354,12 @@ class DecoupledMultiGATEncoder(nn.Module):
                     f"expected second dimension {self.dim}"
                 )
             offsets = self.phi(soft_offset_per_graph.to(x.device))
-            x = x.clone()
-            for graph_index in range(batch_size):
-                idx = (batch == graph_index).nonzero(as_tuple=False).view(-1)
-                graph_code_mask = code_mask[idx]
-                if graph_code_mask.any():
-                    x[idx[graph_code_mask]] = x[idx[graph_code_mask]] + float(xi) * offsets[graph_index]
+            if soft_import_mask is not None:
+                if soft_import_mask.shape != (batch_size,):
+                    raise ValueError("soft_import_mask must have shape (B,).")
+                # phi has biases: zero input alone does not mean Skip/Hard.
+                offsets = offsets * soft_import_mask.to(device=x.device, dtype=x.dtype).unsqueeze(1)
+            x = x + float(xi) * offsets[batch] * code_mask.unsqueeze(-1)
 
         x = self.dropout(x)
         h_sem = self.semantic(x, batch=batch, code_mask=code_mask)
@@ -376,13 +371,9 @@ class DecoupledMultiGATEncoder(nn.Module):
         )
         z = self.fusion(h_sem, h_struct)
 
-        batch_size = int(batch.max().item()) + 1 if batch.numel() > 0 else 0
-        h_G = torch.zeros((batch_size, self.dim), dtype=z.dtype, device=z.device)
-        for graph_index in range(batch_size):
-            idx = (batch == graph_index).nonzero(as_tuple=False).view(-1)
-            graph_code_mask = code_mask[idx]
-            if graph_code_mask.any():
-                h_G[graph_index] = z[idx[graph_code_mask]].sum(dim=0)
+        from torch_geometric.nn import global_add_pool
+
+        h_G = global_add_pool(z * code_mask.unsqueeze(-1), batch, size=batch_data.num_graphs)
 
         return h_G, z
 

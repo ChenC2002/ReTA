@@ -1,0 +1,10 @@
+# CUDA validation profile; install torch first with the wheel matching your driver.
+# Tested with Python 3.13 and torch 2.13.0+cu130 on RTX PRO 6000.
+torch==2.13.0
+torch-geometric==2.7.0
+numpy==2.5.4
+pandas==3.0.6
+scikit-learn==1.9.1
+transformers==5.19.0
+pyyaml==6.0.3
+loguru==0.7.3

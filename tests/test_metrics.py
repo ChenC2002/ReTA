@@ -51,6 +51,13 @@ class AccuracyAtKTests(unittest.TestCase):
 
         self.assertAlmostEqual(self.acc_at_k(true, scores, k=3), 1.0)
 
+    def test_average_precision_handles_ties_independently_of_row_order(self):
+        from reta.learning.inference import auprc_micro
+        true = self.np.asarray([[1, 0]])
+        scores = self.np.asarray([[0.5, 0.5]])
+        self.assertEqual(auprc_micro(true, scores), 0.5)
+        self.assertEqual(auprc_micro(true[:, ::-1], scores), 0.5)
+
     def test_compute_all_uses_normalized_accuracy(self) -> None:
         true = self.np.asarray([[1, 1, 0], [0, 1, 1]])
         probabilities = self.np.asarray([[0.9, 0.1, 0.8], [0.1, 0.9, 0.8]])

@@ -84,20 +84,9 @@ def auprc_micro(y_true, y_score) -> float:
     """Compute micro-averaged area under the precision-recall curve."""
     true = _to_numpy(y_true).astype(np.int32)
     score = _to_numpy(y_score).astype(np.float32)
-    try:
-        from sklearn.metrics import average_precision_score
+    from sklearn.metrics import average_precision_score
 
-        return float(average_precision_score(true.reshape(-1), score.reshape(-1)))
-    except Exception:
-        true_flat = true.reshape(-1)
-        score_flat = score.reshape(-1)
-        order = np.argsort(-score_flat)
-        true_flat = true_flat[order]
-        cumulative = np.cumsum(true_flat)
-        positives = np.where(true_flat == 1)[0]
-        if len(positives) == 0:
-            return 0.0
-        return float(np.mean(cumulative[positives] / (positives + 1)))
+    return float(average_precision_score(true.reshape(-1), score.reshape(-1)))
 
 
 def micro_f1(y_true, y_pred_bin) -> float:
