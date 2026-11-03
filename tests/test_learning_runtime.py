@@ -88,11 +88,8 @@ class LearningRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(tokens, [0])
 
-        encoder = SimpleNamespace(
-            embed=SimpleNamespace(
-                emb=SimpleNamespace(weight=torch.nn.Parameter(torch.zeros(3, 2)))
-            )
-        )
+        from reta.learning.model import ConceptEmbedding
+        encoder = SimpleNamespace(embed=ConceptEmbedding(3, 2))
         self.assertEqual(index.initialize_embedding_table(encoder.embed.emb.weight), 3)
         lookup = self.runtime.encoder_code_embedding_lookup(encoder)
         self.np.testing.assert_allclose(lookup(0), [1.0, 0.0])

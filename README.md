@@ -8,54 +8,48 @@ patient trajectory. Instead of expanding every EHR graph with the same
 knowledge, ReTA selects a retrieved template and applies **Soft Import**,
 **Hard Import**, or **Skip** according to the evolving patient state.
 
-
 ## Method Map
 
 The implementation follows the same sequence as the paper method:
 
 | Paper stage                         | Implementation                                               | Responsibility                                               |
 | ----------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| **Visit Graph Construction (§2.1)** | [`reta/data/`](reta/data)                                    | Normalize ICD codes, map ICD to CCS, aggregate 24-hour visits, and construct visit graphs |
-| **Knowledge Pool (§2.2)**           | [`distill.py`](reta/knowledge/distill.py), [`filtering.py`](reta/knowledge/filtering.py), [`clustering.py`](reta/knowledge/clustering.py), [`pool.py`](reta/knowledge/pool.py) | Validate, ground, filter, cluster, and retrieve knowledge templates |
+| **Visit Graph Construction (§2.1)** | [`reta/data/`](reta/data)                                    | Normalize ICD codes, map ICD to CCS, group admission-level visits, and construct graphs |
+| **Knowledge Pool (§2.2)**           | [`distill.py`](reta/knowledge/distill.py), [`filtering.py`](reta/knowledge/filtering.py), [`clustering.py`](reta/knowledge/clustering.py), [`features.py`](reta/knowledge/features.py), [`pool.py`](reta/knowledge/pool.py) | Ground and cluster templates; cache frozen ClinicalBERT features; retrieve with a shared trainable code projection |
 | **Augmentation Policy (§2.3)**      | [`policy.py`](reta/learning/policy.py), [`runtime.py`](reta/learning/runtime.py), [`rl_train.py`](reta/learning/rl_train.py) | Build policy states, select Soft/Hard/Skip actions, compute paired rewards, and optimize with REINFORCE |
 | **Decoupled Encoding (§2.4)**       | [`model.py`](reta/learning/model.py)                         | Encode semantic and structural views, apply augmentation, fuse both channels, and predict CCS categories |
 | **Two-Stage Training (§2.5)**       | [`warmup.py`](reta/learning/warmup.py), [`rl_train.py`](reta/learning/rl_train.py), [`reta.yaml`](configs/reta.yaml) | Warm up the encoder, then refine the policy and live encoder |
-| **Evaluation (§3)**                 | [`inference.py`](reta/learning/inference.py), [`results/`](results), [`logs/`](logs) | Validate checkpoint contracts, evaluate diagnosis prediction, and store reference results |
+| **Evaluation (§3)**                 | [`select_checkpoint.py`](reta/learning/select_checkpoint.py), [`inference.py`](reta/learning/inference.py) | Select by validation macro-AUPRC, tune Micro-F1 threshold on validation, and evaluate the held-out set |
 
-Supporting release contracts live in
-[`reta/knowledge/releases/pool_v1/`](reta/knowledge/releases/pool_v1), and the
-test suite is in [`tests/`](tests).
+The core task is next-visit diagnosis prediction. Implementation choices and
+optional training commands are in [workflow notes](docs/workflow.md).
 
 ## Quick Start
 
 ### Install
 
-Dependencies for the original Python 3.10/3.11 environment are pinned in
-[`requirements.txt`](requirements.txt). Additional installation options are in
-the [setup guide](docs/setup.md).
+Use Python 3.10–3.13 in a virtual environment:
 
 ```bash
 git clone https://github.com/ChenC2002/ReTA.git
 cd ReTA
-python3.11 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt -e .
+python -m pip install -e .
 ```
 
-### Validate
+[Setup notes](docs/setup.md) cover pinned dependency profiles and package checks.
 
-The repository includes a versioned pool specification and a one-template,
-four-dimensional example for validation only:
+### Run without clinical data
 
 ```bash
-reta validate-pool-release
-reta validate-template-pool \
-  --templates_jsonl examples/tiny_templates.jsonl \
-  --expected_dim 4
-python tests/test_smoke.py
+python examples/run_toy.py
 ```
 
-Run the full test suite with:
+This runs warm-up → policy training → validation selection → test inference
+on synthetic trajectories and synthetic cached features. Outputs go to `runs/toy`;
+no model download is needed. Its scores are **not clinical results**. Use
+`--out runs/toy-2` for a new run.
 
 ```bash
 python -m unittest discover -s tests -p 'test*.py'
@@ -71,7 +65,7 @@ generated concept-level distillation responses.
 
 | Input                   | Required format                                              |
 | ----------------------- | ------------------------------------------------------------ |
-| Diagnosis events        | CSV with `patient_id,timestamp,icd_code`; add `icd_version` for mixed ICD-9/10 data |
+| Diagnosis events        | CSV with `patient_id,visit_id,timestamp,icd_code`; add `icd_version` for mixed ICD-9/10 data |
 | ICD-to-CCS mapping      | CSV with `icd,ccs`; add `icd_version` for a versioned mapping |
 | Preprocessing hierarchy | CSV with `child,parent`                                      |
 
@@ -85,6 +79,7 @@ generated concept-level distillation responses.
 | Embedding candidates   | Optional CSV/JSONL with `mention,entity_id,score`            |
 | PrimeKG support        | CSV with `u,v` and optional `relation`                       |
 | CCS filtering support  | CSV with `parent,child`                                      |
+| Canonical descriptions | JSON object mapping every ICD/CCS/KG ID in the token vocabulary to its canonical description |
 
 Both hierarchy readers use the named `parent` and `child` columns, so column
 order does not matter. Preserve the parent/child direction and compatible CCS
@@ -94,12 +89,14 @@ identifiers; preprocessing additionally requires a single-parent hierarchy.
 
 ### Step 1: Preprocess
 
-The preprocessor treats `timestamp` as an event time and creates fixed 24-hour
-windows anchored at each patient's first valid event.
+For MIMIC exports, use the admission ID as `visit_id` and admission time as
+`timestamp`. All diagnoses from the same admission form one visit, including
+stays spanning multiple days.
 
 ```bash
 python -m reta.data.preprocess \
   --events data/raw/diagnoses.csv \
+  --visit_id_col visit_id \
   --icd2ccs data/resources/icd_to_ccs.csv \
   --ccs_hierarchy data/resources/ccs_hierarchy.csv \
   --out_dir data/processed \
@@ -110,19 +107,13 @@ For mixed ICD-9/10 input, include an `icd_version` column in both files and
 append `--icd_version_col icd_version` and
 `--mapping_icd_version_col icd_version` to the command.
 
-
-- `data/processed/processed.pt`, containing vocabularies and patient
-  trajectories; and
-- `data/processed/splits.json`, containing deterministic, patient-disjoint
-  train/validation/test identifiers.
+The command writes `processed.pt` and a patient-disjoint `splits.json`.
+Without `--visit_id_col`, legacy event data uses 24-hour windows.
 
 ### Step 2: Build the Pool
 
-The versioned prompts, schemas, thresholds, and pinned model revision are in
-[`reta/knowledge/releases/pool_v1`](reta/knowledge/releases/pool_v1). Generate
-one schema-valid response per concept outside this repository, then validate
-and serialize those responses. The command below performs no LLM request and
-stores no API credentials.
+Generate one concept-level response per row using the [prompt and schema](reta/knowledge/releases/pool_v1).
+The following command validates supplied responses; it does not call an LLM.
 
 ```bash
 python -m reta.knowledge.distill \
@@ -146,9 +137,8 @@ python -m reta.knowledge.filtering \
   --out-summary-json results/filtering_summary.json
 ```
 
-Filtering uses precomputed embedding candidates and performs no model download.
-Clustering loads the exact Bio_ClinicalBERT revision recorded in `pool_v1` and
-may download it if it is not already cached:
+Clustering uses pinned Bio_ClinicalBERT features and saves both the pool and its
+projection (`templates.jsonl.projection.pt`):
 
 ```bash
 python -m reta.knowledge.clustering \
@@ -172,10 +162,26 @@ reta build-entity-map \
   --out data/resources/entity_to_token.json
 ```
 
+Cache canonical-description features using the **same** encoder and projection:
+
+```bash
+python -m reta.knowledge.features \
+  --processed_path data/processed/processed.pt \
+  --entity_to_token_json data/resources/entity_to_token.json \
+  --descriptions_json data/resources/descriptions.json \
+  --templates_jsonl data/knowledge/templates.jsonl \
+  --projection data/knowledge/templates.jsonl.projection.pt \
+  --out data/knowledge/concept_features.pt
+```
+
+For example, `descriptions.json` contains entries such as
+`{"ICD:25000": "Diabetes mellitus without complication", "CCS:49": "Diabetes mellitus without complication"}`.
+Provide descriptions for all vocabulary tokens, including external KG nodes.
+Training freezes these cached features and learns the shared `W_code` projection.
+
 ### Step 3: Train
 
-Review [`configs/reta.yaml`](configs/reta.yaml) before training. Its defaults
-match the main paper settings where implemented.
+Set input paths in [`configs/reta.yaml`](configs/reta.yaml), then run:
 
 ```bash
 python -m reta.learning.warmup --config configs/reta.yaml
@@ -184,23 +190,11 @@ python -m reta.learning.rl_train \
   --warmup_ckpt checkpoints/warmup.pt
 ```
 
-Stage 1 writes `checkpoints/warmup.pt`. Stage 2 requires that checkpoint and
-writes `checkpoints/rl_iterN.pt` after every iteration. Stage 1 saves after each
-epoch. Both stages save optimizer and RNG state for boundary-level recovery:
-
-```bash
-python -m reta.learning.warmup --config configs/reta.yaml --resume checkpoints/warmup.pt
-python -m reta.learning.rl_train --config configs/reta.yaml --resume checkpoints/rl_iter10.pt
-```
-
-Keep the original configuration; increasing the total epochs/iterations and
-changing output directories is supported. Legacy weight-only checkpoints remain
-valid for inference but cannot resume training. Stage-2 rewards compare raw and
-edited visits under the same live encoder; the frozen Stage-1 model supplies
-uncertainty only. This corrects older training behavior and requires retraining
-to measure its effect.
-
-See the [workflow guide](docs/workflow.md) for execution details and multi-seed runs.
+Stage 1 learns the encoder with stochastic Soft/Hard exposure. Stage 2 trains
+the Soft/Hard/Skip policy with REINFORCE and refines the encoder on selected
+augmentations. Paired rewards compare raw and edited inputs under the same live
+encoder with dropout disabled; the frozen Stage-1 encoder supplies uncertainty.
+Both stages save optimizer and RNG state for [resuming](docs/workflow.md).
 
 ### Step 4: Select on validation, then evaluate
 
@@ -212,14 +206,9 @@ python -m reta.learning.select_checkpoint --config configs/reta.yaml \
   --report results/selection.json
 ```
 
-The selector rejects checkpoints trained on `val`, `test`, or `all`, checks
-input fingerprints, and writes the selection metric and candidate scores.
-The default metric is micro average precision. Equal scores use sorted filename
-order. Evaluate the selected checkpoint on the test set after selection:
-
-
-Inference checks the processed data, split, template pool, vocabulary, entity
-mapping, and model fingerprints against the checkpoint contract.
+Selection uses **macro average precision** and saves a global Micro-F1 threshold
+chosen on validation predictions. Test inference reuses both the selected model
+and that threshold:
 
 ```bash
 python -m reta.learning.inference \
@@ -232,25 +221,22 @@ python -m reta.learning.inference \
   --out results/inference.json
 ```
 
-Add `--max_patients 10` for a small checkpoint-backed evaluation. Add
-`--include-sample-metadata` to record action metadata keyed by run-local patient
-indices. A Hard Import that cannot attach any new structure is recorded as a
-no-op rather than as a successful structural edit.
-
-Local inference reports `AUPRC_micro`, `MicroF1@0.5`, and `Acc@20` on the
-`[0, 1]` scale.
+Inference reports `AUPRC_macro`, `MicroF1`, and `Acc@20` on `[0, 1]`, with
+micro average precision retained as an auxiliary metric. Macro-AUPRC uses
+scikit-learn average precision, including zero for labels without positives.
+Unselected checkpoints use threshold 0.5. Add `--max_patients 10` for a small run.
 
 ## Outputs
 
-Paper-reported numbers are included as synchronized reference artifacts in
-[`results/paper_results.json`](results/paper_results.json) and
-[`logs/paper_results.jsonl`](logs/paper_results.jsonl).
+The existing paper-result files are archived references from the previous
+manuscript, not outputs from this implementation or results for the latest PDF.
 
 | Output                                       | Path                                                         |
 | -------------------------------------------- | ------------------------------------------------------------ |
-| Paper reference results                      | `results/paper_results.json`, `logs/paper_results.jsonl`     |
+| Archived paper reference results                      | `results/paper_results.json`, `logs/paper_results.jsonl`     |
 | Distilled, grounded, and clustered knowledge | `data/knowledge/{artifacts,grounded,templates}.jsonl`        |
 | Filtering diagnostics                        | `results/filtering_audit.jsonl`, `results/filtering_summary.json` |
+| Frozen text features and pool projection | `data/knowledge/concept_features.pt`, `data/knowledge/templates.jsonl.projection.pt` |
 | Training checkpoints                         | `checkpoints/warmup.pt`, `checkpoints/rl_iter*.pt`, `checkpoints/best.pt`           |
 | Validation checkpoint selection             | `results/selection.json`                                   |
 | Local diagnosis evaluation                   | `results/inference.json`                                     |

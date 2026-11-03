@@ -13,11 +13,13 @@ from typing import List, Optional, Tuple
 import torch
 
 from reta.knowledge.pool import KnowledgePool
+from reta.knowledge.features import load_concept_features
 from .runtime import (
     EntityTokenMapper,
     PoolAlignedTokenIndex,
     TrajectorySampler,
     build_checkpoint_contract,
+    file_fingerprint,
     encoder_code_embedding_lookup,
     load_config,
     resolve_device,
@@ -98,6 +100,7 @@ def main():
         retrieval_K=cfg.knowledge.retrieval_K,
         retrieval_alpha=cfg.knowledge.retrieval_alpha,
         soft_xi=cfg.train.soft_xi,
+        concept_features_sha256=file_fingerprint(cfg.model.concept_features_path) if cfg.model.concept_features_path else None,
     )
 
     encoder = DecoupledMultiGATEncoder(
@@ -106,11 +109,11 @@ def main():
         gnn_layers=cfg.model.gnn_layers,
         attn_heads=cfg.model.attn_heads,
         dropout=cfg.model.dropout,
+        **load_concept_features(cfg.model.concept_features_path, mapper, cfg.model.dim, cfg.knowledge.templates_jsonl),
     ).to(device)
-    initialized_tokens = aligned_index.initialize_embedding_table(
-        encoder.embed.emb.weight
-    )
-    logger.info(f"initialized {initialized_tokens} encoder embeddings from the pool")
+    if cfg.model.concept_features_path is None:
+        aligned_index.initialize_embedding_table(encoder.embed.emb.weight)
+        logger.info("Using lookup embeddings (synthetic/legacy mode); configure concept_features_path for Eq. 1.")
     code_embed_lookup = encoder_code_embedding_lookup(encoder)
 
     predictor = NextVisitPredictor(

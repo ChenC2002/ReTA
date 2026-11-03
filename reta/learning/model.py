@@ -65,18 +65,37 @@ class ConceptEmbedding(nn.Module):
         dim: int = 256,
         padding_idx: Optional[int] = None,
         dropout: float = 0.0,
+        text_features: Optional[torch.Tensor] = None,
+        text_projection: Optional[torch.Tensor] = None,
     ):
         super().__init__()
         self.vocab_size = int(vocab_size)
         self.dim = int(dim)
-        self.emb = nn.Embedding(self.vocab_size, self.dim, padding_idx=padding_idx)
         self.dropout = nn.Dropout(dropout)
-        nn.init.xavier_uniform_(self.emb.weight)
+        if text_features is None:
+            # Lightweight synthetic fixtures and existing lookup-table checkpoints.
+            self.emb = nn.Embedding(self.vocab_size, self.dim, padding_idx=padding_idx)
+            nn.init.xavier_uniform_(self.emb.weight)
+            self.projection = nn.Identity()
+        else:
+            if text_features.ndim != 2 or text_features.shape[0] != self.vocab_size:
+                raise ValueError("text_features must have one row per vocabulary token.")
+            if text_projection is None or text_projection.shape != (self.dim, text_features.shape[1]):
+                raise ValueError("text_projection must have shape (dim, text_dim).")
+            if not torch.isfinite(text_features).all() or not torch.isfinite(text_projection).all():
+                raise ValueError("text features and projection must be finite.")
+            self.emb = nn.Embedding.from_pretrained(text_features.float().clone(), freeze=True)
+            self.projection = nn.Linear(text_features.shape[1], self.dim, bias=False)
+            with torch.no_grad():
+                self.projection.weight.copy_(text_projection)
+
+    def lookup(self, token_ids: torch.Tensor) -> torch.Tensor:
+        """Shared e_c = W_code f_text(desc(c)), without training-time dropout."""
+        return self.projection(self.emb(token_ids))
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         """Embed token IDs into vectors of shape ``(*, dim)``."""
-        x = self.emb(token_ids)
-        return self.dropout(x)
+        return self.dropout(self.lookup(token_ids))
 
     def load_pretrained(self, weights: torch.Tensor, strict: bool = True):
         """Load pretrained weights, allowing a partial load when non-strict."""
@@ -284,10 +303,13 @@ class DecoupledMultiGATEncoder(nn.Module):
         attn_heads: int = 4,
         dropout: float = 0.3,
         padding_idx: Optional[int] = None,
+        text_features: Optional[torch.Tensor] = None,
+        text_projection: Optional[torch.Tensor] = None,
     ):
         super().__init__()
         self.dim = int(dim)
-        self.embed = ConceptEmbedding(vocab_size=vocab_size, dim=dim, padding_idx=padding_idx, dropout=0.0)
+        self.embed = ConceptEmbedding(vocab_size=vocab_size, dim=dim, padding_idx=padding_idx,
+                                      text_features=text_features, text_projection=text_projection)
         self.phi = nn.Sequential(
             nn.Linear(self.dim, self.dim),
             nn.ReLU(inplace=True),
@@ -569,3 +591,11 @@ def graft_hard_import(
         code_mask=code_mask,
         num_nodes=len(new_nodes),
     )
+
+
+def text_embedding_kwargs(state_dict):
+    """Reconstruct the frozen text table from a self-contained checkpoint."""
+    projection = state_dict.get("embed.projection.weight")
+    if projection is None:
+        return {}
+    return {"text_features": state_dict["embed.emb.weight"], "text_projection": projection}

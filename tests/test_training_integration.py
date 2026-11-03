@@ -15,10 +15,11 @@ import torch
 import yaml
 
 from reta.learning import warmup, rl_train, inference
-from reta.learning.runtime import Config, load_checkpoint
+from reta.learning.runtime import Config, load_checkpoint, file_fingerprint, mapping_fingerprint
 
 
 class TrainingIntegrationTests(unittest.TestCase):
+    use_text_features = False
     def test_two_stage_resume_and_inference(self):
         torch.set_num_threads(1)
         with tempfile.TemporaryDirectory() as tmp:
@@ -50,6 +51,15 @@ class TrainingIntegrationTests(unittest.TestCase):
                             meta=dict(icd_vocab_size=1, ccs_vocab_size=2, ccs_label_vocab_size=2),
                             vocab=dict(name_to_token={"ICD:25000": 0, "CCS:49": 1, "CCS:50": 2})),
                        cfg.data.processed_path)
+
+            if self.use_text_features:
+                cfg.model.concept_features_path = str(root / "features.pt")
+                torch.save({"features": torch.arange(30, dtype=torch.float32).reshape(5, 6) / 30,
+                            "projection": torch.eye(4, 6),
+                            "mapping_sha256": mapping_fingerprint({"ICD:25000": 0, "CCS:49": 1, "CCS:50": 2,
+                                                                   "UMLS:C0035309": 3, "UMLS:C0442874": 4}),
+                            "templates_sha256": file_fingerprint(cfg.knowledge.templates_jsonl)},
+                           cfg.model.concept_features_path)
 
             def run(module, *args):
                 config = root / "config.yaml"
@@ -106,7 +116,7 @@ class TrainingIntegrationTests(unittest.TestCase):
                 root / "resumed/best.pt", root / "selection.json",
             )
             self.assertEqual(selection["selection"]["split"], "val")
-            scores = [record["metrics"]["AUPRC_micro"] for record in selection["candidates"]]
+            scores = [record["metrics"]["AUPRC_macro"] for record in selection["candidates"]]
             self.assertEqual(selection["selection"]["score"], max(scores))
             self.assertEqual(load_checkpoint(root / "resumed/best.pt")["selection"], selection["selection"])
             with mock.patch.object(sys, "argv", ["inference", "--checkpoint", str(root / "resumed/best.pt"),
@@ -118,6 +128,21 @@ class TrainingIntegrationTests(unittest.TestCase):
                                    "--split", "test", "--out", str(root / "inference.json")]):
                 inference.main()
             self.assertTrue((root / "inference.json").is_file())
+            report = json.loads((root / "inference.json").read_text())
+            self.assertEqual(report["meta"]["prediction_threshold"], selection["selection"]["prediction_threshold"])
+            self.assertEqual(report["meta"]["threshold_source"], "validation")
+            if self.use_text_features:
+                # Evaluation restores text features from the checkpoint itself.
+                Path(cfg.model.concept_features_path).unlink()
+                result = inference.run_inference(str(root / "resumed/best.pt"), cfg.data.processed_path,
+                    cfg.knowledge.templates_jsonl, cfg.knowledge.entity_to_token_json, cfg.data.split_json,
+                    "test", device=cfg.train.device)
+                self.assertEqual(result["metrics"], report["metrics"])
+                self.assertEqual(result["meta"]["retrieval_space"], "clinicalbert_shared_projection_v1")
+
+
+class TextFeatureTrainingIntegrationTests(TrainingIntegrationTests):
+    use_text_features = True
 
 
 if __name__ == "__main__":

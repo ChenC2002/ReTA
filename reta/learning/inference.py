@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import warnings
 from typing import Dict, List, Mapping, Optional
 
 import numpy as np
@@ -51,6 +52,7 @@ from .runtime import (
 )
 from .model import (
     DecoupledMultiGATEncoder,
+    text_embedding_kwargs,
     NextVisitPredictor,
     build_pyg_data,
     graft_hard_import,
@@ -91,13 +93,39 @@ def auprc_micro(y_true, y_score) -> float:
 
 def micro_f1(y_true, y_pred_bin) -> float:
     """Compute micro F1 for binary multi-label predictions."""
-    true = _to_numpy(y_true).astype(np.int32)
-    predicted = _to_numpy(y_pred_bin).astype(np.int32)
-    true_positive = (true * predicted).sum()
-    false_positive = ((1 - true) * predicted).sum()
-    false_negative = (true * (1 - predicted)).sum()
-    denominator = 2 * true_positive + false_positive + false_negative
-    return float(2 * true_positive / denominator) if denominator > 0 else 0.0
+    from sklearn.metrics import f1_score
+    return float(f1_score(_to_numpy(y_true).reshape(-1), _to_numpy(y_pred_bin).reshape(-1),
+                          average="binary", zero_division=0))
+
+
+def auprc_macro(y_true, y_score) -> float:
+    """Mean per-label average precision; labels without positives contribute zero."""
+    from sklearn.metrics import average_precision_score
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="No positive class found in y_true")
+        return float(average_precision_score(_to_numpy(y_true), _to_numpy(y_score), average="macro"))
+
+
+def select_f1_threshold(y_true, probs) -> float:
+    """Select a global Micro-F1 threshold on validation predictions only.
+
+    Search observed score thresholds with sklearn; ties choose the highest
+    threshold (fewer predicted labels). The caller enforces split isolation.
+    """
+    from sklearn.metrics import precision_recall_curve
+    true, score = _to_numpy(y_true), _to_numpy(probs)
+    if (true.ndim != 2 or true.size == 0 or score.shape != true.shape
+            or not np.isin(true, [0, 1]).all() or not np.isfinite(score).all()
+            or ((score < 0) | (score > 1)).any()):
+        raise ValueError("Threshold selection requires aligned binary labels and finite probabilities.")
+    if not true.any():
+        return 1.0
+    precision, recall, thresholds = precision_recall_curve(true.ravel(), score.ravel())
+    denominator = precision[:-1] + recall[:-1]
+    f1 = np.divide(2 * precision[:-1] * recall[:-1], denominator,
+                   out=np.zeros_like(denominator), where=denominator > 0)
+    best = np.flatnonzero(f1 == f1.max())[-1]
+    return float(thresholds[best])
 
 
 def acc_at_k(y_true, y_score, k: int = 20) -> float:
@@ -159,9 +187,12 @@ def compute_all(
     if not np.isfinite(score).all() or ((score < 0.0) | (score > 1.0)).any():
         raise ValueError("probabilities must be finite and in [0, 1].")
     predicted = (score >= float(threshold)).astype(np.int32)
+    f1 = micro_f1(true, predicted)
     return {
+        "AUPRC_macro": auprc_macro(true, score),
         "AUPRC_micro": auprc_micro(true, score),
-        f"MicroF1@{threshold:g}": micro_f1(true, predicted),
+        "MicroF1": f1,
+        f"MicroF1@{threshold:g}": f1,
         f"Acc@{int(k)}": acc_at_k(true, score, k=int(k)),
         "num_samples": int(true.shape[0]),
         "num_labels": int(true.shape[1]) if true.ndim == 2 else 0,
@@ -193,7 +224,10 @@ def run_inference(
     max_patients: Optional[int] = None,
     out_path: Optional[str] = None,
     include_sample_metadata: bool = False,
+    calibrate_threshold: bool = False,
 ) -> Dict:
+    if calibrate_threshold and split != "val":
+        raise ValueError("Threshold calibration is allowed only on the validation split.")
     data = load_processed_data(processed_path)
     trajectories: Dict[str, List[Dict]] = data["trajectories"]
     meta = data["meta"]
@@ -214,7 +248,8 @@ def run_inference(
     embedding_weight = encoder_state.get("embed.emb.weight")
     if embedding_weight is None or embedding_weight.ndim != 2:
         raise ValueError("checkpoint encoder state is missing embed.emb.weight.")
-    inferred_dim = int(embedding_weight.shape[1])
+    projection_weight = encoder_state.get("embed.projection.weight")
+    inferred_dim = int(projection_weight.shape[0] if projection_weight is not None else embedding_weight.shape[1])
     dim = int(_config_value(cfg, "model", "dim", inferred_dim))
     gnn_layers = int(_config_value(cfg, "model", "gnn_layers", 2))
     attn_heads = int(_config_value(cfg, "model", "attn_heads", 4))
@@ -255,6 +290,9 @@ def run_inference(
     if max_patients is not None and int(max_patients) <= 0:
         raise ValueError("max_patients must be positive when provided.")
 
+    if calibrate_threshold and (not effective_split_json or training_split != "train"):
+        raise ValueError("Threshold calibration requires held-out validation patients and train-only fitting.")
+
     pids = select_patient_ids(
         list(trajectories.keys()),
         effective_split_json,
@@ -290,6 +328,7 @@ def run_inference(
             _config_value(cfg, "knowledge", "retrieval_alpha", 0.3)
         ),
         soft_xi=float(_config_value(cfg, "train", "soft_xi", 0.5)),
+        concept_features_sha256=ck.get("contract", {}).get("concept_features_sha256"),
     )
     require_checkpoint_contract(ck, contract)
 
@@ -299,6 +338,7 @@ def run_inference(
         gnn_layers=gnn_layers,
         attn_heads=attn_heads,
         dropout=dropout,
+        **text_embedding_kwargs(encoder_state),
     ).to(device_t)
     predictor = NextVisitPredictor(
         in_dim=dim,
@@ -320,6 +360,7 @@ def run_inference(
             gnn_layers=gnn_layers,
             attn_heads=attn_heads,
             dropout=dropout,
+            **text_embedding_kwargs(ck["baseline_encoder"]),
         ).to(device_t)
         baseline_predictor = NextVisitPredictor(
             in_dim=dim,
@@ -569,7 +610,14 @@ def run_inference(
 
     logits = torch.cat(all_logits, dim=0).numpy()
     y_true = torch.cat(all_targets, dim=0).numpy().astype(np.int32)
-    metrics = compute_all(y_true, logits=logits, threshold=0.5, k=20)
+    probs = torch.sigmoid(torch.from_numpy(logits)).numpy()
+    selection = ck.get("selection", {})
+    threshold = float(selection.get("prediction_threshold", 0.5))
+    threshold_source = "validation" if "prediction_threshold" in selection else "default"
+    if calibrate_threshold:
+        threshold = select_f1_threshold(y_true, probs)
+        threshold_source = "validation"
+    metrics = compute_all(y_true, probs=probs, threshold=threshold, k=20)
     metrics["num_patients"] = int(len(evaluated_patient_indices))
 
     result = {
@@ -585,8 +633,11 @@ def run_inference(
             "augmentation_policy": "learned" if policy_net is not None else "skip_raw",
             "seed": int(effective_seed),
             "metric_value_scale": "unit_interval",
-            "auprc_averaging": "micro",
-            "prediction_threshold": 0.5,
+            "auprc_averaging": "macro",
+            "auprc_estimator": "average_precision",
+            "empty_label_ap": 0.0,
+            "prediction_threshold": threshold,
+            "threshold_source": threshold_source,
             "accuracy_k": 20,
             "retrieval_space": contract["retrieval_space"],
             "pool_token_coverage": float(aligned_index.processed_coverage),

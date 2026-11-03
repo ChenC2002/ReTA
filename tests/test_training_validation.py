@@ -54,9 +54,10 @@ class TrainingValidationTests(unittest.TestCase):
             for path in (a, b):
                 torch.save({"contract": {"training_split": "train"}}, path)
             with mock.patch("reta.learning.select_checkpoint.run_inference",
-                            return_value={"metrics": {"AUPRC_micro": 0.5}}) as infer:
+                            return_value={"metrics": {"AUPRC_macro": 0.5}, "meta": {"prediction_threshold": 0.3}}) as infer:
                 result = select_checkpoint([b, a], cfg, root / "best.pt", root / "report.json")
-                self.assertEqual(result["selection"]["source"], str(a))
+                self.assertEqual(result["selection"]["source"], str(a.resolve()))
+                self.assertEqual(result["selection"]["prediction_threshold"], 0.3)
                 self.assertTrue(all(call.kwargs["split"] == "val" for call in infer.call_args_list))
             with self.assertRaisesRegex(ValueError, "overwrite"):
                 select_checkpoint([a], cfg, a, root / "report.json")
@@ -74,7 +75,23 @@ class TrainingValidationTests(unittest.TestCase):
             path = root / "candidate.pt"
             torch.save({"contract": {"training_split": "train"}}, path)
             with mock.patch("reta.learning.select_checkpoint.run_inference",
-                            return_value={"metrics": {"AUPRC_micro": float("nan")}}):
+                            return_value={"metrics": {"AUPRC_macro": float("nan")}}):
                 with self.assertRaisesRegex(ValueError, "Non-finite"):
                     select_checkpoint([path], cfg, root / "best.pt", root / "report.json")
             self.assertFalse((root / "best.pt").exists())
+
+    def test_reinforce_single_step_keeps_reward_signal(self):
+        from reta.learning.policy import PolicyNet, ReinforceConfig, ReinforceTrainer, ReinforceBuffer
+        torch.manual_seed(7)
+        policy = PolicyNet(2, 3, hidden_dim=4, dropout=0)
+        trainer = ReinforceTrainer(policy, ReinforceConfig(), lr=0.01, weight_decay=0)
+        state = torch.zeros(2)
+        action = torch.tensor([1])
+        before = policy.distribution(state).probs[0, 1].item()
+        logp, entropy = policy.evaluate_actions(state, action)
+        buffer = ReinforceBuffer()
+        buffer.add_trajectory([{"reward": torch.tensor(1.), "logp": logp, "entropy": entropy}])
+        trainer.update(buffer)
+        after = policy.distribution(state).probs[0, 1].item()
+        self.assertGreater(after, before)
+        self.assertEqual(trainer.baseline.value, 1.0)

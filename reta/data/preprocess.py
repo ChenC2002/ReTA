@@ -1,6 +1,6 @@
 """
 - Patient trajectories are sequences of visits.
-- Each visit aggregates diagnosis codes within a 24-hour window.
+- Visits group diagnoses by admission ID when supplied; legacy event data can use 24-hour windows.
 - Inputs are ICD codes; targets are CCS categories at the *next* visit.
 - Visit graphs contain ICD nodes plus CCS ancestors within <=h levels, with CCS hierarchy edges.
 
@@ -160,6 +160,7 @@ def preprocess(
     train_fraction: float = 0.7,
     val_fraction: float = 0.1,
     test_fraction: float = 0.2,
+    visit_id_col: Optional[str] = None,
 ) -> Dict:
     """Run preprocessing and serialize outputs.
 
@@ -179,6 +180,10 @@ def preprocess(
     df = pd.read_csv(events_path, dtype=str, keep_default_na=False)
 
     required_columns = [patient_col, time_col, icd_col]
+    if visit_id_col is not None:
+        if visit_id_col in required_columns:
+            raise ValueError("visit_id_col must be distinct from patient, time, and code columns")
+        required_columns.append(visit_id_col)
     if icd_version_col is not None:
         required_columns.append(icd_version_col)
     for c in required_columns:
@@ -194,10 +199,7 @@ def preprocess(
     if input_events == 0:
         raise ValueError("events file contains no records")
 
-    selected_columns = [patient_col, time_col, icd_col]
-    if icd_version_col is not None:
-        selected_columns.append(icd_version_col)
-    df = df[selected_columns].copy()
+    df = df[required_columns].copy()
     df[patient_col] = df[patient_col].astype("string").str.strip()
     missing_patient = df[patient_col].isna() | df[patient_col].eq("")
     dropped_missing_patient = int(missing_patient.sum())
@@ -222,8 +224,18 @@ def preprocess(
                 raise ValueError(f"invalid ICD version at event row {row_index}: {exc}") from exc
         df[icd_version_col] = normalized_versions
 
-    # Visit bins (24-hour aggregation)
-    df['visit_bin'] = make_24h_visit_bins(df, patient_col, time_col)
+    if visit_id_col is None:
+        df['visit_bin'] = make_24h_visit_bins(df, patient_col, time_col)
+    else:
+        df[visit_id_col] = df[visit_id_col].str.strip()
+        if df[visit_id_col].eq("").any():
+            raise ValueError("admission-level visits require non-empty visit IDs")
+        # Keep a multi-day admission together; IDs themselves need not sort by time.
+        admissions = (df.groupby([patient_col, visit_id_col], as_index=False)[time_col]
+                       .min().sort_values([patient_col, time_col, visit_id_col], kind="stable"))
+        admissions['visit_bin'] = admissions.groupby(patient_col).cumcount()
+        df = df.merge(admissions[[patient_col, visit_id_col, 'visit_bin']],
+                      on=[patient_col, visit_id_col], how="left", validate="many_to_one")
 
     # Map ICD->token ids and ICD->CCS
     if icd_version_col is None:
@@ -303,6 +315,9 @@ def preprocess(
     dataset = {
         'trajectories': trajectories,
         'meta': {
+            'visit_unit': 'admission' if visit_id_col else '24h_window',
+            'visit_id_col': visit_id_col,
+            'split_unit': 'patient',
             'patient_col': patient_col,
             'time_col': time_col,
             'icd_col': icd_col,
@@ -358,6 +373,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument('--out_dir', type=str, required=True, help='Output directory.')
     p.add_argument('--patient_col', type=str, default='patient_id')
     p.add_argument('--time_col', type=str, default='timestamp')
+    p.add_argument('--visit_id_col', default=None, help='Admission/encounter ID column; use this for MIMIC visits.')
     p.add_argument('--icd_col', type=str, default='icd_code')
     p.add_argument('--h_anc', type=int, default=2)
     p.add_argument('--min_visits', type=int, default=2)
@@ -393,6 +409,7 @@ def main():
         train_fraction=args.train_fraction,
         val_fraction=args.val_fraction,
         test_fraction=args.test_fraction,
+        visit_id_col=args.visit_id_col,
     )
 
 

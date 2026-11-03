@@ -30,6 +30,9 @@ knowledge:
   entity_to_token_json: data/resources/entity_to_token.json
 
 model:
+  # Frozen canonical-description features from reta.knowledge.features
+  concept_features_path: data/knowledge/concept_features.pt
+
   # Embedding/hidden dimension (default 256)
   dim: 256
 

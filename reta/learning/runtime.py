@@ -77,6 +77,7 @@ class ModelConfig:
     gnn_layers: int = 2
     attn_heads: int = 4
     dropout: float = 0.3
+    concept_features_path: Optional[str] = None
 
 
 @dataclass
@@ -203,6 +204,7 @@ def validate_config(cfg: Config) -> None:
         optional=True,
     )
 
+    require_path("model.concept_features_path", cfg.model.concept_features_path, optional=True)
     require_int("model.dim", cfg.model.dim)
     require_int("model.gnn_layers", cfg.model.gnn_layers)
     require_int("model.attn_heads", cfg.model.attn_heads)
@@ -351,6 +353,7 @@ def build_checkpoint_contract(
     retrieval_K: int,
     retrieval_alpha: float,
     soft_xi: float,
+    concept_features_sha256: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build the immutable data/model identity stored in every checkpoint."""
 
@@ -385,7 +388,7 @@ def build_checkpoint_contract(
     split_manifest_sha256 = file_fingerprint(split_json) if split_json else None
     split_identity = f"{split_manifest_sha256 or 'none'}:{training_split}"
 
-    return {
+    contract = {
         "format_version": CHECKPOINT_FORMAT_VERSION,
         "retrieval_space": RETRIEVAL_SPACE,
         "icd_vocab_size": icd_vocab_size,
@@ -411,6 +414,10 @@ def build_checkpoint_contract(
             split_identity.encode("utf-8")
         ).hexdigest(),
     }
+    if concept_features_sha256 is not None:
+        contract["concept_features_sha256"] = concept_features_sha256
+        contract["retrieval_space"] = "clinicalbert_shared_projection_v1"
+    return contract
 
 
 def require_checkpoint_contract(
@@ -757,7 +764,7 @@ class PoolAlignedTokenIndex:
 
 
 def encoder_code_embedding_lookup(encoder: Any) -> Callable[[int], np.ndarray]:
-    """Return a retrieval lookup backed by the encoder's live embedding table."""
+    """Return code vectors using the same live projection as node encoding."""
 
     try:
         weight = encoder.embed.emb.weight
@@ -766,12 +773,13 @@ def encoder_code_embedding_lookup(encoder: Any) -> Callable[[int], np.ndarray]:
     if not torch.is_tensor(weight) or weight.ndim != 2:
         raise ValueError("encoder embed.emb.weight must be a two-dimensional tensor.")
 
+    @torch.no_grad()
     def lookup(token: int) -> np.ndarray:
         token = int(token)
         if token < 0 or token >= int(weight.shape[0]):
             raise ValueError(f"code token {token} is outside the encoder vocabulary.")
         return (
-            weight[token]
+            encoder.embed.lookup(torch.tensor(token, device=weight.device))
             .detach()
             .to(device="cpu", dtype=torch.float32)
             .numpy()
@@ -785,7 +793,10 @@ def fold_policy_state_for_retrieval(
     history_current_state: Any,
     dim: int,
 ) -> np.ndarray:
-    """Fold a ``[history; current]`` GRU state into normalized pool space."""
+    """Eq. 1 with fixed W_ret = [I/2, I/2] in the basic framework.
+
+    Top-K is discrete; no untrained retrieval parameters are introduced.
+    """
 
     dim = int(dim)
     if dim <= 0:

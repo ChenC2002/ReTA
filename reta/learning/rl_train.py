@@ -17,6 +17,7 @@ from .runtime import (
     PoolAlignedTokenIndex,
     TrajectorySampler,
     build_checkpoint_contract,
+    file_fingerprint,
     encoder_code_embedding_lookup,
     fold_policy_state_for_retrieval,
     load_checkpoint,
@@ -32,6 +33,7 @@ from .runtime import (
 )
 from .model import (
     DecoupledMultiGATEncoder,
+    text_embedding_kwargs,
     NextVisitPredictor,
     build_pyg_data,
     graft_hard_import,
@@ -65,13 +67,14 @@ def build_argparser() -> argparse.ArgumentParser:
     return p
 
 
-def make_models(vocab_size: int, ccs_vocab_size: int, cfg, device: torch.device) -> Tuple[DecoupledMultiGATEncoder, NextVisitPredictor]:
+def make_models(vocab_size: int, ccs_vocab_size: int, cfg, device: torch.device, encoder_state=None) -> Tuple[DecoupledMultiGATEncoder, NextVisitPredictor]:
     encoder = DecoupledMultiGATEncoder(
         vocab_size=vocab_size,
         dim=cfg.model.dim,
         gnn_layers=cfg.model.gnn_layers,
         attn_heads=cfg.model.attn_heads,
         dropout=cfg.model.dropout,
+        **text_embedding_kwargs(encoder_state or {}),
     ).to(device)
     predictor = NextVisitPredictor(in_dim=cfg.model.dim, num_labels=ccs_vocab_size, dropout=cfg.model.dropout).to(device)
     return encoder, predictor
@@ -130,24 +133,20 @@ def main():
         retrieval_K=cfg.knowledge.retrieval_K,
         retrieval_alpha=cfg.knowledge.retrieval_alpha,
         soft_xi=cfg.train.soft_xi,
+        concept_features_sha256=file_fingerprint(cfg.model.concept_features_path) if cfg.model.concept_features_path else None,
     )
 
+    if not os.path.exists(warmup_checkpoint):
+        raise FileNotFoundError(f"Warmup checkpoint is required for Stage 2: {warmup_checkpoint}")
+    ck = load_checkpoint(warmup_checkpoint)
+    require_checkpoint_contract(ck, contract)
     encoder, predictor = make_models(
-        mapper.vocab_size,
-        ccs_label_vocab_size,
-        cfg,
-        device,
+        mapper.vocab_size, ccs_label_vocab_size, cfg, device,
+        encoder_state=ck["encoder"],
     )
-    if os.path.exists(warmup_checkpoint):
-        ck = load_checkpoint(warmup_checkpoint)
-        require_checkpoint_contract(ck, contract)
-        load_state_dict_strict(encoder, ck["encoder"], "encoder")
-        load_state_dict_strict(predictor, ck["predictor"], "predictor")
-        logger.info(f"loaded warmup checkpoint: {warmup_checkpoint}")
-    else:
-        raise FileNotFoundError(
-            f"Warmup checkpoint is required for Stage 2 baseline: {warmup_checkpoint}"
-        )
+    load_state_dict_strict(encoder, ck["encoder"], "encoder")
+    load_state_dict_strict(predictor, ck["predictor"], "predictor")
+    logger.info(f"loaded checkpoint: {warmup_checkpoint}")
     code_embed_lookup = encoder_code_embedding_lookup(encoder)
 
     # Frozen Stage-1 model supplies uncertainty only; reward uses the live encoder.

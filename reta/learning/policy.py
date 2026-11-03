@@ -414,10 +414,10 @@ class ReinforceTrainer:
         ent_t = torch.stack(entropies).view(-1)
         ret_t = torch.stack(returns).view(-1)
 
-        baseline = self.baseline.update(ret_t)
+        # Use the previous running mean: centering on this batch would erase
+        # the learning signal for single-step or constant-return batches.
+        baseline = self.baseline.value
         adv = ret_t - baseline
-        if adv.numel() > 1:
-            adv = (adv - adv.mean()) / (adv.std(unbiased=False) + 1e-8)
 
         loss_policy = -(adv.detach() * logp_t).mean()
         loss_entropy = -ent_t.mean()
@@ -429,6 +429,7 @@ class ReinforceTrainer:
         loss.backward()
         nn.utils.clip_grad_norm_(self.params, self.cfg.max_grad_norm, error_if_nonfinite=True)
         self.opt.step()
+        self.baseline.update(ret_t)
 
         return {
             "loss_policy": float(loss_policy.item()),

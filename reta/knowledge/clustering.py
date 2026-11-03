@@ -37,8 +37,8 @@ def l2_normalize(x: np.ndarray, axis: int = -1, eps: float = 1e-12) -> np.ndarra
     return x / n
 
 
-def project_to_dim(X: np.ndarray, dim: int) -> np.ndarray:
-    """Project cluster centroids into the model embedding space.
+def fit_projection(X: np.ndarray, dim: int) -> np.ndarray:
+    """Fit a reusable (model_dim, text_dim) projection on external centroids.
 
     Template vectors ``p_k`` live in ``R^d``. Transformer encoders may produce
     a different dimensionality, so we use a deterministic projection after
@@ -53,18 +53,22 @@ def project_to_dim(X: np.ndarray, dim: int) -> np.ndarray:
     if not np.isfinite(X).all():
         raise ValueError("template embeddings contain NaN or infinite values")
     if X.shape[1] == dim:
-        return X
+        return np.eye(dim, dtype=np.float32)
     if X.shape[1] < dim:
-        pad = np.zeros((X.shape[0], dim - X.shape[1]), dtype=np.float32)
-        return np.concatenate([X, pad], axis=1)
+        return np.eye(dim, X.shape[1], dtype=np.float32)
 
     max_components = min(X.shape[0] - 1, X.shape[1])
     if max_components >= dim and X.shape[0] > 1:
         svd = TruncatedSVD(n_components=dim, random_state=0)
-        return svd.fit_transform(X).astype(np.float32)
+        svd.fit(X)
+        return svd.components_.astype(np.float32)
 
     # Very tiny pools cannot support SVD to the requested rank.
-    return X[:, :dim].astype(np.float32)
+    return np.eye(dim, X.shape[1], dtype=np.float32)
+
+
+def project_to_dim(X: np.ndarray, dim: int) -> np.ndarray:
+    return np.asarray(X, dtype=np.float32) @ fit_projection(X, dim).T
 
 
 class TextEmbedder:
@@ -181,6 +185,7 @@ def cluster_templates(
     projection_dim: int = 256,
     model_revision: str = DEFAULT_MODEL_REVISION,
     backend: str = EMBEDDING_BACKEND,
+    projection_path: str | None = None,
 ) -> List[KnowledgeTemplate]:
     if len(grounded) == 0:
         raise ValueError("grounded template list is empty; cannot build a knowledge pool.")
@@ -228,10 +233,15 @@ def cluster_templates(
         [centroid for _, centroid, _ in cluster_records],
         axis=0,
     ).astype(np.float32)
-    projected_centroids = l2_normalize(
-        project_to_dim(original_centroids, projection_dim),
-        axis=1,
-    )
+    if projection_path is None:
+        projected = project_to_dim(original_centroids, projection_dim)
+    else:
+        import torch
+        from reta.learning.checkpointing import atomic_save
+
+        projection = fit_projection(original_centroids, projection_dim)
+        projected = original_centroids @ projection.T
+    projected_centroids = l2_normalize(projected, axis=1)
 
     templates: List[KnowledgeTemplate] = []
     for tid, ((indices, _, medoid_idx), vector) in enumerate(
@@ -249,6 +259,11 @@ def cluster_templates(
     errors = validate_template_pool(templates, expected_dim=projection_dim)
     if errors:
         raise ValueError("invalid clustered template pool: " + "; ".join(errors))
+    if projection_path is not None:
+        atomic_save({"weight": torch.from_numpy(projection),
+                     "template_vectors": torch.from_numpy(projected_centroids),
+                     "model_name": model_name, "model_revision": model_revision,
+                     "backend": backend}, projection_path)
     return templates
 
 
@@ -256,6 +271,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Cluster grounded templates into knowledge pool.")
     p.add_argument("--grounded_jsonl", type=str, required=True)
     p.add_argument("--out_jsonl", type=str, required=True)
+    p.add_argument("--out_projection", default=None, help="Defaults to templates.jsonl.projection.pt beside the pool.")
     p.add_argument("--tau", type=float, default=0.16)
     p.add_argument("--model_name", type=str, default=DEFAULT_MODEL_NAME)
     p.add_argument("--model_revision", type=str, default=DEFAULT_MODEL_REVISION)
@@ -274,6 +290,7 @@ def main():
         projection_dim=args.projection_dim,
         model_revision=args.model_revision,
         backend=args.backend,
+        projection_path=args.out_projection or args.out_jsonl + ".projection.pt",
     )
     save_templates_jsonl(templates, args.out_jsonl)
     print(f"[clustering] wrote {len(templates)} templates to {args.out_jsonl}")

@@ -109,6 +109,31 @@ class DataContractTests(unittest.TestCase):
             splits = json.loads((root / "processed" / "splits.json").read_text(encoding="utf-8"))
             self.assertEqual(splits, {"test": [], "train": ["p1"], "val": []})
 
+    def test_admissions_keep_multiday_stays_and_order_by_time(self):
+        from reta.data.ontology import CCSOntology
+        from reta.data.preprocess import preprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            mapping, hierarchy = self._files(root, "icd,ccs\n001,ONE\n002,TWO\n",
+                                             "child,parent\nONE,ROOT\nTWO,ROOT\n")
+            events = root / "events.csv"
+            events.write_text("patient_id,visit_id,timestamp,icd_code\n"
+                              "p,z,2020-01-01T00:00:00Z,001\n"
+                              "p,z,2020-01-05T00:00:00Z,002\n"
+                              "p,a,2020-01-06T00:00:00Z,002\n"
+                              "p,b,2020-01-06T12:00:00Z,001\n")
+            ontology = CCSOntology.from_files(str(mapping), str(hierarchy))
+            result = preprocess(str(events), ontology, str(root / "out"), visit_id_col="visit_id")
+            visits = result["trajectories"]["p"]
+            self.assertEqual(len(visits), 3)
+            self.assertEqual(len(visits[0]["icd_tokens"]), 2)
+            self.assertEqual(visits[0]["label_ccs"], [ontology.ccs_to_token("TWO")])
+            self.assertEqual(visits[1]["label_ccs"], [ontology.ccs_to_token("ONE")])
+            self.assertEqual(result["meta"]["visit_unit"], "admission")
+            events.write_text(events.read_text().replace("p,z,", "p,,"))
+            with self.assertRaisesRegex(ValueError, "non-empty visit IDs"):
+                preprocess(str(events), ontology, str(root / "bad"), visit_id_col="visit_id")
+
     def test_visit_bins_use_fixed_24_hour_windows(self) -> None:
         import pandas as pd
 
