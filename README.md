@@ -1,71 +1,38 @@
 # Import What You Need: Learning When and How to Augment EHR Graphs with External Knowledge
 
-![ReTA: knowledge retrieval, visit-level import policy, and decoupled graph encoding](assets/reta_overview.png)
-
 ReTA (**Re**inforcement learning-based dynamic **T**opology **A**ugmentation)
 learns whether, what, and how to import external knowledge at each visit.
 It retrieves relevant templates, chooses **Soft Import**, **Hard Import**, or
 **Skip**, and predicts the next visit’s diagnosis categories from the evolving
 patient history.
 
-[Interactive Demo](https://chenc2002.github.io/ReTA/demo/) · [Downloads](#downloads) · [Method Map](#method-map) · [Quick Start](#quick-start) · [Data](#data) · [Workflow](#workflow)
+[Live Demo](https://chenc2002.github.io/ReTA/demo/) · [Method](#method) · [Data](#data) · [Workflow](#workflow)
 
 ## Demo
 
 [**Open the interactive demo**](https://chenc2002.github.io/ReTA/demo/)
 
-[![ReTA diagnosis explorer](assets/reta_demo.png)](https://chenc2002.github.io/ReTA/demo/)
+Explore three example histories, switch visits, and compare predictions before
+and after knowledge import. The online viewer replays model outputs; the local
+demo also accepts edited inputs.
 
-Explore diabetes and kidney disease, heart failure, and respiratory examples.
-Switch visits, compare scores before and after knowledge import, and inspect the
-selected template and graph. The online viewer replays actual model outputs for
-three example histories. The local demo accepts edited inputs and runs the same
-prediction code used in evaluation.
-
-The released model was trained on a **7,494-patient MIMIC-III cohort** using
-frozen ClinicalBERT concept features and 196 CCS ontology templates. Four
-configurations were compared on validation; the selected model uses square-root
-positive-class weights. Held-out evaluation covers **1,499 patients and 2,518
-next-visit predictions**, across 283 diagnosis labels.
-
-| Model | Macro-AUPRC | Micro-F1 | Acc@20 |
-| --- | ---: | ---: | ---: |
-| Diagnosis frequency | 4.32% | 33.53% | 44.56% |
-| Linear history model | **21.70%** | **48.88%** | **63.46%** |
-| ReTA encoder | 18.64% | 43.04% | 58.16% |
-| ReTA adaptive knowledge | 18.82% | 44.06% | 59.05% |
-
-These are results of the released demo experiment: a patient-disjoint split,
-seed 42, and validation-selected checkpoint and F1 threshold. The editable
-examples illustrate inference; they are not test cases with known future labels.
-
-### Downloads
+<a href="https://chenc2002.github.io/ReTA/demo/">
+  <img src="assets/reta_demo.png" alt="ReTA diagnosis explorer: open the interactive demo" width="720">
+</a>
 
 | Package | Size | Contents |
 | --- | ---: | --- |
-| [Offline viewer](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-offline.zip) | 15.3 KB | Open `index.html`; includes all three recorded examples and evaluation |
-| [Complete model package](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-model.zip) | 129.5 MB | Full checkpoint, vocabulary, knowledge pool, mappings, descriptions, configuration, and reference predictions |
+| [Offline viewer](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-offline.zip) | 15.6 KB | Open `index.html`; includes all three recorded examples and evaluation |
+| [Complete demo model](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-model.zip) | 139.2 MB | Both prediction branches, knowledge resources, configuration, and reference predictions |
+| [Core ReTA model](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-core-model.zip) | 129.5 MB | Original graph model and import policy, with the same portable resources |
 | [SHA-256 checksums](https://github.com/ChenC2002/ReTA/releases/download/V2.0/SHA256SUMS) | <1 KB | Verify the downloaded archives |
 
-The model archive expands to approximately **143 MB**. Its **139.9 MB checkpoint**
-contains the encoder, predictor, policy, state encoder, frozen baseline models,
-optimizer states, and random-number states. Cached concept features are already
-inside the checkpoint. No MIMIC patient records or patient split lists are included.
+The demo combines ReTA with a linear diagnosis-history model; the core ReTA
+package is also available. Both include complete checkpoints and cached concept features.
+The package contains no patient records.
 
-## Method Map
-
-| Paper stage | Code | What it does |
-| --- | --- | --- |
-| **Visit graphs** | [`reta/data/`](reta/data) | Group admissions, map ICD to CCS, and construct visit graphs |
-| **Knowledge pool** | [`reta/knowledge/`](reta/knowledge) | Validate, ground, cluster, and retrieve concept-level templates |
-| **Import policy** | [`policy.py`](reta/learning/policy.py), [`rl_train.py`](reta/learning/rl_train.py) | Select Soft/Hard/Skip actions and learn from paired rewards |
-| **Decoupled encoding** | [`model.py`](reta/learning/model.py) | Fuse semantic and structural representations with causal visit memory |
-| **Two-stage training** | [`warmup.py`](reta/learning/warmup.py), [`rl_train.py`](reta/learning/rl_train.py) | Warm up the encoder, then refine the policy and predictor |
-| **Evaluation and demo** | [`inference.py`](reta/learning/inference.py), [`prediction.py`](reta/learning/prediction.py) | Share prediction logic between held-out evaluation and interactive inference |
-
-## Quick Start
-
-Use Python 3.10–3.13:
+<details>
+<summary>Run locally (Python 3.10–3.13)</summary>
 
 ```bash
 git clone https://github.com/ChenC2002/ReTA.git
@@ -76,8 +43,7 @@ python -m pip install ".[demo]"
 reta demo
 ```
 
-`reta demo` opens the online viewer. Use `reta demo --no-open` to print its URL.
-To edit histories and run the trained model locally, download and extract the
+To run the model locally, download and extract the
 [model package](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-model.zip), then run:
 
 ```bash
@@ -85,9 +51,67 @@ reta demo --bundle /path/to/reta-demo-model --verify
 reta demo --bundle /path/to/reta-demo-model
 ```
 
-Open `http://127.0.0.1:8765`. CPU inference is sufficient; no dataset access or
-ClinicalBERT download is needed. Bundle checksums are checked before loading.
-`--verify` reproduces all three examples, including scores, actions, and graph structure.
+Open `http://127.0.0.1:8765`. CPU inference is sufficient. `--verify` checks
+the package and reproduces all three recorded examples.
+
+</details>
+
+<details>
+<summary>MIMIC-III experiment</summary>
+
+The demo was trained on a **7,494-patient MIMIC-III cohort**, with frozen
+ClinicalBERT concept features and 196 CCS ontology templates. Held-out evaluation
+covers **1,499 patients and 2,518 next-visit predictions**, across 283 labels.
+
+The released demo uses **25% ReTA and 75% linear-history logits**, selected on
+validation. Both branches are fitted on training patients. The table reports the
+core algorithm and this engineering variant separately.
+
+| Model | Macro-AUPRC | Micro-F1 | Acc@20 |
+| --- | ---: | ---: | ---: |
+| Diagnosis frequency | 4.32% | 33.53% | 44.56% |
+| Linear history model | 21.70% | 48.88% | 63.46% |
+| ReTA encoder | 18.64% | 43.04% | 58.16% |
+| ReTA adaptive knowledge | 18.82% | 44.06% | 59.05% |
+| ReTA + linear history | **22.32%** | **49.65%** | **64.14%** |
+
+These are results of the released demo experiment: a patient-disjoint split,
+seed 42, and validation-selected checkpoint and F1 threshold. The table evaluates held-out
+patient trajectories; demo histories illustrate inference. See the
+[history-head workflow](docs/workflow.md#optional-demo-history-head) to fit the optional demo variant.
+
+</details>
+
+## Method
+
+![ReTA: knowledge retrieval, visit-level import policy, and decoupled graph encoding](assets/reta_overview.png)
+
+### 1. Retrieve knowledge
+
+Build visit graphs from diagnosis codes and a pool of grounded knowledge templates.
+Retrieve relevant templates from the current visit and patient history.
+
+### 2. Choose an import
+
+A visit-level policy chooses **Soft Import** to adjust code features, **Hard Import**
+to add connected knowledge nodes, or **Skip** to keep the visit unchanged.
+
+### 3. Predict and learn
+
+Semantic attention and graph attention encode the visit with causal history memory.
+The predictor estimates next-visit diagnosis categories. Encoder warm-up is followed
+by REINFORCE policy learning and supervised predictor updates.
+
+### Code map
+
+| Paper stage | Code | What it does |
+| --- | --- | --- |
+| **Visit graphs** | [`reta/data/`](reta/data) | Group admissions, map ICD to CCS, and construct visit graphs |
+| **Knowledge pool** | [`reta/knowledge/`](reta/knowledge) | Validate, ground, cluster, and retrieve concept-level templates |
+| **Import policy** | [`policy.py`](reta/learning/policy.py), [`rl_train.py`](reta/learning/rl_train.py) | Select Soft/Hard/Skip actions and learn from paired rewards |
+| **Decoupled encoding** | [`model.py`](reta/learning/model.py) | Fuse semantic and structural representations with causal visit memory |
+| **Two-stage training** | [`warmup.py`](reta/learning/warmup.py), [`rl_train.py`](reta/learning/rl_train.py) | Warm up the encoder, then refine the policy and predictor |
+| **Evaluation and demo** | [`inference.py`](reta/learning/inference.py), [`prediction.py`](reta/learning/prediction.py) | Share prediction logic between held-out evaluation and interactive inference |
 
 ## Data
 
@@ -118,9 +142,7 @@ python -m reta.learning.rl_train --config configs/reta.yaml \
   --warmup_ckpt checkpoints/warmup.pt
 ```
 
-Warm-up exposes the encoder to stochastic knowledge imports. Stage 2 learns
-Soft/Hard/Skip decisions through REINFORCE while refining the encoder. PyTorch
-and PyTorch Geometric provide optimization, attention, recurrent state, and graph batching.
+PyTorch and PyTorch Geometric provide the model, optimization, and graph batching.
 
 ### 2. Select and evaluate
 

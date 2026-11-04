@@ -6,16 +6,18 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="./">ReTA<span>RESEARCH DEMO</span></a><div class="top-right"><span id="connection" class="status">Connecting</span><span class="version">V2.0</span></div></header>
+  <header class="topbar"><a class="brand" href="./">ReTA<span>Diagnosis explorer · V2.0</span></a><nav class="top-right" aria-label="Demo views"><button id="explorer-tab" class="view-tab active" aria-pressed="true">Explorer</button><button id="experiment-tab" class="view-tab" aria-pressed="false" hidden>Experiment</button><a href="https://github.com/ChenC2002/ReTA" aria-label="GitHub repository">GitHub ↗</a></nav></header>
   <main>
-    <section class="intro"><div><div class="eyebrow">KNOWLEDGE, WHEN IT HELPS</div><h1>From history to what’s next.</h1><p>Explore how ReTA predicts diagnoses and chooses when to import knowledge.</p></div><div class="intro-note"><strong>One visit. One decision.</strong><p>Soft import · Hard import · Skip</p><a href="https://github.com/ChenC2002/ReTA#quick-start">Run locally ↗</a></div></section>
+    <section id="explorer-view">
+    <section class="intro"><div><div class="eyebrow" id="model-label">ADAPTIVE KNOWLEDGE IMPORT</div><h1>Next-visit diagnoses</h1></div><span id="connection" class="status">Connecting</span></section>
     <div class="workspace">
       <aside class="panel input-panel">
+        <h2 class="sidebar-heading">Example histories</h2><div id="examples" class="example-list" aria-label="Example histories"></div>
+        <details id="observed-details" class="observations" open><summary id="observed-heading">Observed diagnoses</summary><ul id="observed-summary" class="observed-summary"></ul></details>
         <details id="history-editor" open>
-          <summary class="editor-summary"><span><span class="eyebrow">EXAMPLE HISTORY</span><strong id="history-title">Visit history</strong></span><span class="edit-label">Edit <span aria-hidden="true">↗</span></span></summary>
+          <summary class="editor-summary"><span id="history-title">Visit codes</span><span class="edit-label">Edit <span aria-hidden="true">↗</span></span></summary>
           <div class="editor-body">
-            <label for="example">Choose a starting point</label><select id="example" disabled></select>
-            <p class="input-caption">Each visit contains observed ICD-9-CM codes. Edit them or add another completed visit.</p>
+            <p class="input-caption">Edit ICD-9-CM codes or add a completed visit.</p>
             <div id="visits"></div>
             <button id="add-visit" class="quiet" type="button">＋ Add a visit</button>
             <details class="lookup"><summary>Find a diagnosis code</summary><label for="search" class="sr-only">Search diagnosis names or codes</label><input id="search" placeholder="Search a name or code…" autocomplete="off"><div id="search-results"></div></details>
@@ -30,10 +32,9 @@
         <div id="empty-state" class="empty-state"><div class="empty-symbol">↗</div><h2>Your next prediction starts here.</h2><p>Run the edited history to see updated diagnosis scores<br>and the knowledge operation selected by the model.</p></div>
         <div id="output" hidden>
           <section class="panel prediction-panel">
-            <div class="prediction-heading"><div><div class="eyebrow" id="prediction-context">AFTER THE LATEST VISIT</div><h2>Next-visit diagnoses</h2></div><span class="tag">Live prediction</span></div>
-            <div id="observed-summary" class="observed-summary"></div>
+            <div class="prediction-heading"><div><div class="eyebrow" id="prediction-context">AFTER THE LATEST VISIT</div><h2>Predicted diagnosis categories</h2></div></div>
             <div class="prediction-toolbar"><span class="small muted">Model scores · not calibrated clinical risks</span><label class="compare-label"><input id="compare" type="checkbox"> Compare import</label></div>
-            <div class="prediction-labels"><span>DIAGNOSIS CATEGORY</span><span id="score-heading">MODEL SCORE</span></div><div id="predictions"></div>
+            <div class="prediction-labels"><span>DIAGNOSIS CATEGORY</span><span id="score-heading">MODEL SCORE</span></div><div id="predictions"></div><button id="show-more" class="quiet" aria-expanded="false" hidden>Show more</button>
             <p id="comparison-note" class="comparison-note" hidden>Before / after the current knowledge operation, with the same observed history. A larger score is not necessarily a better prediction.</p>
           </section>
           <div class="decision-strip"><span class="decision-dot" aria-hidden="true"></span><div><div id="decision-summary"></div><p id="decision-detail"></p></div></div>
@@ -46,8 +47,9 @@
         </div>
       </section>
     </div>
-    <section id="experiment" class="experiment" hidden><div><div class="eyebrow">HELD-OUT EVALUATION</div><h2>MIMIC-III</h2><p id="experiment-context"></p></div><div class="table-wrap"><table><thead><tr><th scope="col">Model</th><th scope="col">Macro-AUPRC</th><th scope="col">Micro-AUPRC</th><th scope="col">Micro-F1</th><th scope="col">Acc@20</th></tr></thead><tbody id="metrics"></tbody></table><p class="small muted">Aggregate test results. The example above has no known next visit and is not an accuracy measurement.</p></div></section>
-    <footer><span>ReTA · Adaptive knowledge augmentation for longitudinal EHR graphs</span><span>Research use · No patient records shown</span></footer>
+    </section>
+    <section id="experiment" class="experiment" hidden><div><div class="eyebrow">HELD-OUT EVALUATION</div><h2>MIMIC-III</h2><p id="experiment-context"></p><p id="experiment-model" class="model-note" hidden></p></div><div class="table-wrap"><table><thead><tr><th scope="col">Model</th><th scope="col">Macro-AUPRC</th><th scope="col">Micro-AUPRC</th><th scope="col">Micro-F1</th><th scope="col">Acc@20</th></tr></thead><tbody id="metrics"></tbody></table><p class="small muted">Checkpoint and F1 threshold selected on validation. Aggregate test results. Example histories have no known next visit and are separate from this evaluation.</p></div></section>
+    <footer><span>Research use · No patient records shown</span><a href="https://github.com/ChenC2002/ReTA#demo">Download model &amp; run locally ↗</a></footer>
   </main>
   <script src="./app.js" defer></script>
 </body>

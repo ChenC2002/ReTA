@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-let metadata, historyResult, activeVisit = 0;
+let metadata, historyResult, activeVisit = 0, showAll = false;
 const recorded = Boolean(window.RETA_DEMO);
 const percent = value => `${(value * 100).toFixed(1)}%`;
 
@@ -29,11 +29,12 @@ async function request(url, options) {
 function setVisits(visits) {
   $('visits').replaceChildren();
   visits.forEach(codes => addVisit(codes));
-  $('history-title').textContent = 'Visit history';
+  $('history-title').textContent = 'Visit codes';
 }
 
 function markDirty() {
   historyResult = null;
+  $('observed-details').hidden = true;
   $('output').hidden = true;
   $('empty-state').hidden = false;
   $('visit-tabs').replaceChildren();
@@ -136,9 +137,11 @@ function drawGraph(graph) {
 
 function renderVisit(index) {
   activeVisit = index;
+  $('observed-details').hidden = false;
   const step = historyResult.steps[index];
   $('prediction-context').textContent = `AFTER VISIT ${step.visit}`;
-  $('observed-summary').replaceChildren(node('b', 'Observed: '), document.createTextNode(step.codes.map(c => c.name).join(' · ')));
+  $('observed-heading').textContent = `Observed at visit ${step.visit}`;
+  $('observed-summary').replaceChildren(...step.codes.map(c => node('li', c.name)));
   $('graph-selection').textContent = 'Select a node to inspect its concept.';
   $('retrieval-description').textContent = metadata.grounded_candidates_only
     ? 'Roots matched to observed visit concepts, then ranked by code similarity.'
@@ -182,7 +185,11 @@ function renderVisit(index) {
   $('comparison-note').hidden = !compare;
   drawGraph(step.graph);
   $('predictions').replaceChildren();
-  for (const item of step.predictions) {
+  const visiblePredictions = showAll ? step.predictions : step.predictions.slice(0, 5);
+  $('show-more').hidden = step.predictions.length <= 5;
+  $('show-more').textContent = showAll ? 'Show fewer' : `Show ${step.predictions.length - 5} more`;
+  $('show-more').setAttribute('aria-expanded', showAll);
+  for (const item of visiblePredictions) {
     const row = node('div', undefined, 'prediction-row'),
       name = node('div', item.name);
     name.append(node('span', `CCS ${item.code}`, 'diagnosis-code'));
@@ -204,7 +211,7 @@ async function predict() {
   $('run').disabled = true;
   $('run').textContent = 'Running model…';
   $('latency').textContent = 'Running model…';
-  $('example').disabled = true;
+  $('examples').querySelectorAll('button').forEach(button => { button.disabled = true; });
   $('add-visit').disabled = true;
   $('visits').querySelectorAll('input,button').forEach(el => {
     el.disabled = true;
@@ -239,9 +246,9 @@ async function predict() {
       };
       $('visit-tabs').append(button);
     });
-    $('latency').textContent = `${recorded ? 'Recorded model run' : historyResult.elapsed_ms + ' ms'} · ${historyResult.steps.length} visits`;
+    $('latency').textContent = `${recorded ? '' : historyResult.elapsed_ms + ' ms · '}${historyResult.steps.length} completed visits`;
     renderVisit(historyResult.steps.length - 1);
-    $('history-title').textContent = `${historyResult.steps.length} completed visits${recorded ? '' : ' · edit history'}`;
+    $('history-title').textContent = `${historyResult.steps.length} visits · ${recorded ? 'view' : 'edit'} codes`;
     if (window.matchMedia('(max-width: 760px)').matches) $('history-editor').open = false;
   } catch (error) {
     $('latency').textContent = 'Prediction unavailable';
@@ -250,7 +257,7 @@ async function predict() {
     $('error').hidden = false;
   } finally {
     $('run').disabled = false;
-    $('example').disabled = false;
+    $('examples').querySelectorAll('button').forEach(button => { button.disabled = false; });
     $('visits').querySelectorAll('input').forEach(el => {
       el.disabled = false;
     });
@@ -261,10 +268,14 @@ async function predict() {
 
 function renderExperiment(results) {
   if (!results || !results.metrics) return;
-  $('experiment').hidden = false;
+  $('experiment-tab').hidden = false;
   $('experiment-context').textContent = results.context || 'Patient-disjoint evaluation · next-visit CCS diagnosis prediction';
+  if (results.fusion) {
+    $('experiment-model').hidden = false;
+    $('experiment-model').textContent = 'Demo: ReTA + linear history, with the blend selected on validation.';
+  }
   for (const [key, value] of Object.entries(results.metrics)) {
-    const row = node('tr', undefined, key === 'stage2' ? 'highlight' : '');
+    const row = node('tr', undefined, key === (results.highlighted_model || 'stage2') ? 'highlight' : '');
     row.append(node('td', results.labels?.[key] || {
       training_prevalence: 'Diagnosis frequency',
       linear_history: 'Linear history model',
@@ -277,10 +288,29 @@ function renderExperiment(results) {
 }
 $('add-visit').onclick = () => addVisit();
 $('run').onclick = predict;
-$('example').onchange = () => {
-  setVisits(metadata.examples[Number($('example').value)].visits);
+function chooseExample(index) {
+  showAll = false;
+  [...$('examples').children].forEach((button, i) => {
+    button.classList.toggle('active', i === index);
+    button.setAttribute('aria-pressed', i === index);
+  });
+  setVisits(metadata.examples[index].visits);
   predict();
-};
+}
+$('show-more').onclick = () => { showAll = !showAll; renderVisit(activeVisit); };
+function showView(view) {
+  const experiment = view === 'experiment' && metadata?.results?.metrics;
+  $('explorer-view').hidden = Boolean(experiment);
+  $('experiment').hidden = !experiment;
+  for (const name of ['explorer', 'experiment']) {
+    const active = name === (experiment ? 'experiment' : 'explorer');
+    $(`${name}-tab`).classList.toggle('active', active);
+    $(`${name}-tab`).setAttribute('aria-pressed', active);
+  }
+}
+$('explorer-tab').onclick = () => { location.hash = 'explorer'; showView('explorer'); };
+$('experiment-tab').onclick = () => { location.hash = 'experiment'; showView('experiment'); };
+window.addEventListener('hashchange', () => showView(location.hash.slice(1)));
 $('compare').onchange = () => { if (historyResult) renderVisit(activeVisit); };
 let searchTimer, searchSequence = 0;
 $('search').oninput = () => {
@@ -314,26 +344,30 @@ $('search').oninput = () => {
 (async () => {
   try {
     metadata = await request('/api/meta');
+    if (metadata.history_fusion) $('model-label').textContent = metadata.prediction_model.toUpperCase();
+    if (window.matchMedia('(max-width: 760px)').matches) $('observed-details').open = false;
     if (recorded) {
       $('add-visit').hidden = true;
       $('run').hidden = true;
       document.querySelector('.lookup').hidden = true;
       document.querySelector('.edit-label').textContent = 'View ↗';
-      document.querySelector('.input-caption').textContent = 'Select an example to explore its recorded model predictions. Download the model package to edit inputs and run new predictions.';
-      document.querySelector('.input-footer').textContent = 'Recorded model inference · example inputs';
-      document.querySelector('.tag').textContent = 'Recorded inference';
+      document.querySelector('.input-caption').textContent = 'ICD-9-CM codes used for this example.';
+      $('history-editor').open = false;
+      document.querySelector('.input-footer').textContent = 'Run locally to edit these codes.';
     }
     metadata.examples.forEach((example, index) => {
-      const option = node('option', example.name);
-      option.value = index;
-      $('example').append(option);
+      const button = node('button', example.name, index === 0 ? 'example active' : 'example');
+      button.setAttribute('aria-pressed', index === 0);
+      button.onclick = () => chooseExample(index);
+      $('examples').append(button);
     });
     setVisits(metadata.examples[0].visits);
-    $('example').disabled = false;
+    $('examples').querySelectorAll('button').forEach(button => { button.disabled = false; });
     $('run').disabled = false;
-    $('connection').textContent = recorded ? 'Example explorer' : 'Model connected';
+    $('connection').textContent = recorded ? 'Recorded model inference' : 'Live model connected';
     $('connection').className = 'status live';
     renderExperiment(metadata.results);
+    showView(location.hash.slice(1));
     await predict();
   } catch {
     $('connection').textContent = 'Model unavailable';

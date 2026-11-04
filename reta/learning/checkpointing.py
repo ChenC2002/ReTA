@@ -54,6 +54,8 @@ def training_state(stage, completed, optimizers, **extra):
 
 
 def validate_resume(checkpoint, cfg, stage):
+    if 'history_head' in checkpoint:
+        raise ValueError('Resume the graph-only source checkpoint before refitting the history head.')
     state = checkpoint.get("training_state")
     if not isinstance(state, dict) or state.get("stage") != stage:
         raise ValueError(f"Checkpoint has no resumable {stage} training state.")

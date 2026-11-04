@@ -120,7 +120,14 @@ class DemoModel:
                 "threshold": self.threshold}
 
     def metadata(self):
+        head = self.session.ck.get('history_head')
+        name = ('Linear history' if head['graph_weight'] == 0 else
+                'ReTA' if head['graph_weight'] == 1 else 'ReTA + linear history') if head else 'ReTA'
         return {"version": "V2.0", "examples": EXAMPLES,
+                "prediction_model": name,
+                "history_fusion": ({"graph_weight": self.session.ck['history_head']['graph_weight'],
+                                    "kind": self.session.ck['history_head']['kind']}
+                                   if 'history_head' in self.session.ck else None),
                 "grounded_candidates_only": self.grounded_candidates_only,
                 "templates": len(self.session.pool.templates), "labels": self.session.ccs_label_vocab_size,
                 "has_policy": self.session.policy_net is not None, "results": self.results}

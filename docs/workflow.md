@@ -59,3 +59,24 @@ RETA_CONFIG=configs/reta.yaml sbatch -p YOUR_PARTITION scripts/train-slurm.sh
 ```
 
 Each job runs on one device, saves its own outputs, and selects on validation.
+
+## Optional demo history head
+
+The demo adds a frozen linear history model to the core ReTA output. It uses
+binary current ICD/CCS concepts and the union of concepts observed so far.
+Scikit-learn fits one-vs-rest logistic regression on training patients; a single
+global logit-blending weight and the F1 threshold are selected on validation.
+The graph encoder and import policy retain their existing weights.
+
+```bash
+python scripts/fit_history_head.py --config configs/reta.yaml \
+  --checkpoint checkpoints/best.pt --out checkpoints/demo.pt \
+  --report results/demo-selection.json
+```
+
+Evaluate `demo.pt` with the same inference command as the core model. Its full
+checkpoint stores both branches; the table labels this variant **ReTA + linear
+history**. To continue graph training, resume its original graph-only checkpoint
+and then refit the head. The implementation follows the standard practice of
+[combining model predictions](https://scikit-learn.org/stable/modules/ensemble.html#voting-classifier),
+with a small validation-selected logit blend rather than an additional learned neural module.

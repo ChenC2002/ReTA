@@ -248,6 +248,8 @@ def run_inference(
             "soft_xi": float(effective_soft_xi),
             "deterministic_policy": bool(deterministic),
             "augmentation_policy": "learned" if policy_net is not None else "skip_raw",
+            "prediction_head": "graph_history_logit_blend_v1" if 'history_head' in ck else "graph",
+            "history_graph_weight": ck.get('history_head', {}).get('graph_weight'),
             "seed": int(effective_seed),
             "metric_value_scale": "unit_interval",
             "auprc_averaging": "macro",

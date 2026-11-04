@@ -2,12 +2,19 @@
 
 The [online viewer](https://chenc2002.github.io/ReTA/demo/) and offline ZIP replay
 three example histories evaluated by the released checkpoint. They share the
-frontend in `reta/demo/static/` with the local FastAPI service. New inputs require
-the local model; the static viewer never labels recorded responses as live inference.
+frontend in `reta/demo/static/` with the local FastAPI service. The Explorer view
+shows example predictions and optional knowledge details; the Experiment view
+contains aggregate held-out metrics. New inputs use the local
+model, while the online viewer displays recorded inference.
+
+The released demo combines ReTA with a frozen linear diagnosis-history head.
+A validation-selected blend of their logits supplies both the final scores and
+the before/after import comparison. The history head uses only observed visits;
+its weights and vocabulary contract are included in the complete checkpoint.
 
 ## Run the complete checkpoint
 
-Install `python -m pip install ".[demo]"`, extract the V2.0 model archive, and run:
+Install `python -m pip install ".[demo]"`, extract the V2.0 demo model archive, and run:
 
 ```bash
 reta demo --bundle /path/to/reta-demo-model --verify
@@ -31,7 +38,11 @@ Prediction verifies the complete architecture, vocabulary and pool fingerprints.
 Training/evaluation additionally verify the original clinical dataset and split
 fingerprints. The checkpoint contains frozen text features, so inference does not
 need the separate feature cache or a Transformer download. Resuming training still
-requires authorized access to the original training resources.
+requires authorized access to the original training resources. Resume the
+graph-only source checkpoint and refit the history head after training.
+
+The separate core-model ZIP preserves the original graph-only checkpoint. Both
+archives contain a `reta-demo-model` directory; extract them in separate locations.
 
 ## Refresh the release
 

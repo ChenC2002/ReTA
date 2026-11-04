@@ -162,6 +162,43 @@ class TrainingIntegrationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'non-finite'):
                     session.predict_visit(trajectories['d'][0])
             session.reset()
+            if self.graph_batching:
+                from scripts import fit_history_head
+                from reta.learning.checkpointing import atomic_save
+                head_path = root/'history.pt'
+                arguments = ['fit_history_head', '--config', str(root/'config.yaml'),
+                             '--checkpoint', str(root/'resumed/best.pt'), '--out', str(head_path),
+                             '--report', str(root/'history-selection.json'), '--jobs', '1']
+                with mock.patch.object(sys, 'argv', arguments), mock.patch.object(
+                    fit_history_head, 'labeled_visits', wraps=fit_history_head.labeled_visits
+                ) as visited:
+                    fit_history_head.main()
+                self.assertEqual([call.args[2] for call in visited.call_args_list], ['train', 'val'])
+                head_checkpoint = load_checkpoint(head_path)
+                # A known nonzero blend makes history isolation directly observable.
+                head_checkpoint['history_head']['graph_weight'] = .25
+                head_checkpoint['predictor']['history_head.weight'] = torch.arange(12).reshape(2,6).float()/10
+                head_checkpoint['predictor']['history_head.bias'] = torch.zeros(2)
+                atomic_save(head_checkpoint, head_path)
+                combined = load_prediction_session(str(head_path), cfg.data.processed_path,
+                    cfg.knowledge.templates_jsonl, cfg.knowledge.entity_to_token_json,
+                    cfg.data.split_json, device=cfg.train.device)
+                session.reset()
+                combined_logits = []
+                for visit in trajectories['d'][:-1]:
+                    raw, raw_trace = session.predict_visit(visit, trace=True)
+                    prediction, trace = combined.predict_visit(visit, trace=True)
+                    linear = head_checkpoint['predictor']['history_head.weight'][:, [0,1,3,4]].sum(1).view(1,-1)
+                    torch.testing.assert_close(prediction, .25*raw + .75*linear)
+                    for key in ('action', 'template_id', 'node_ids', 'edge_index'):
+                        self.assertEqual(trace[key], raw_trace[key])
+                    combined_logits.append(prediction)
+                self.assertEqual(combined.observed_history, {0,1})
+                combined.reset()
+                self.assertEqual(combined.observed_history, set())
+                repeated, _ = combined.predict_visit(trajectories['d'][0])
+                torch.testing.assert_close(repeated, combined_logits[0])
+
             if self.use_text_features:
                 # Evaluation restores text features from the checkpoint itself.
                 Path(cfg.model.concept_features_path).unlink()
@@ -185,6 +222,13 @@ class TrainingIntegrationTests(unittest.TestCase):
             for index, visit in enumerate(trajectories['d'][:-1]):
                 logits, _ = portable.predict_visit(visit)
                 torch.testing.assert_close(logits, original_logits[index])
+            if self.graph_batching:
+                portable_head = load_prediction_session(str(head_path), None,
+                    cfg.knowledge.templates_jsonl, cfg.knowledge.entity_to_token_json,
+                    device=cfg.train.device, vocabulary_path=str(vocabulary))
+                for index, visit in enumerate(trajectories['d'][:-1]):
+                    logits, _ = portable_head.predict_visit(visit)
+                    torch.testing.assert_close(logits, combined_logits[index])
             public['vocab']['name_to_token'] = {'ICD:25001': 0, 'CCS:49': 1, 'CCS:50': 2}
             vocabulary.write_text(json.dumps(public))
             with self.assertRaisesRegex(ValueError, 'contract mismatch'):

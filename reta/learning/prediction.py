@@ -80,8 +80,10 @@ class PredictionSession:
     effective_split_json: Optional[str]
     past_visit_embs: List[torch.Tensor] = field(default_factory=list)
     baseline_past_visit_embs: List[torch.Tensor] = field(default_factory=list)
+    observed_history: set = field(default_factory=set)
 
     def reset(self):
+        self.observed_history.clear()
         self.past_visit_embs.clear()
         self.baseline_past_visit_embs.clear()
         if self.state_enc is not None:
@@ -222,10 +224,18 @@ class PredictionSession:
             xi=effective_soft_xi,
         )
         logits = predictor(h_G)
+        history_head = getattr(predictor, 'history_head', None)
+        updated_history = self.observed_history
+        if history_head is not None:
+            history_logits, updated_history = history_head(node_ids, self.observed_history)
+            logits = history_head.combine(logits, history_logits)
+            if raw_logits is not None:
+                raw_logits = history_head.combine(raw_logits, history_logits)
         checked = [h_G, logits] + ([raw_logits] if raw_logits is not None else [])
         if any(not torch.isfinite(value).all() for value in checked):
             raise ValueError("The model produced non-finite scores for this history.")
 
+        self.observed_history = updated_history
         past_visit_embs.append(h_G[0].detach())
         if baseline_h_current is not None:
             baseline_past_visit_embs.append(baseline_h_current)
@@ -360,6 +370,12 @@ def load_prediction_session(checkpoint_path, processed_path, templates_jsonl,
         num_labels=ccs_label_vocab_size,
         dropout=dropout,
     ).to(device_t)
+
+    if 'history_head' in ck:
+        from .history import LinearHistoryHead
+        predictor.add_module('history_head', LinearHistoryHead.from_checkpoint(
+            ck, icd_vocab_size + ccs_label_vocab_size, ccs_label_vocab_size,
+        ).to(device_t))
 
     load_state_dict_strict(encoder, encoder_state, "encoder")
     load_state_dict_strict(predictor, predictor_state, "predictor")
