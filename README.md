@@ -145,7 +145,6 @@ python -m reta.learning.rl_train --config configs/reta.yaml \
   --warmup_ckpt checkpoints/warmup_best.pt
 ```
 
-PyTorch and PyTorch Geometric provide the model, optimization, and graph batching.
 
 ### 2. Select and evaluate
 
