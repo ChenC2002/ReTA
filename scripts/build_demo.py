@@ -28,6 +28,7 @@ def main():
         f'<script src="./{names["data.js"]}"></script>\n  '
         f'<script src="./{names["app.js"]}" defer></script>')
     (destination/'index.html').write_text(page, encoding='utf-8')
+    (destination/'LICENSE').write_bytes((repository/'LICENSE').read_bytes())
     (destination.parent/'.nojekyll').touch()
     print(destination)
 

@@ -86,8 +86,8 @@ python scripts/fit_history_head.py --config configs/reta.yaml \
 ```
 
 Evaluate `demo.pt` with the same inference command as the core model. Its full
-checkpoint stores both branches; the table labels this variant **ReTA + linear
-history**. To continue graph training, resume its original graph-only checkpoint
+checkpoint stores both branches; the demo labels this variant **ReTA · history
+fusion**. To continue graph training, resume its original graph-only checkpoint
 and then refit the head. The implementation follows the standard practice of
 [combining model predictions](https://scikit-learn.org/stable/modules/ensemble.html#voting-classifier),
 using a small validation-selected logit blend.

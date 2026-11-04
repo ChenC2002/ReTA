@@ -22,7 +22,7 @@ demo also accepts edited inputs.
 
 | Package | Size | Contents |
 | --- | ---: | --- |
-| [Offline viewer](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-offline.zip) | 16.9 KB | Open `index.html`; includes all three recorded examples and evaluation |
+| [Offline viewer](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-offline.zip) | 17.7 KB | Open `index.html`; includes all three recorded examples and evaluation |
 | [Complete demo model](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-model.zip) | 139.2 MB | Both prediction branches, knowledge resources, configuration, and reference predictions |
 | [Core ReTA model](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-core-model.zip) | 129.5 MB | Original graph model and import policy, with the same portable resources |
 | [SHA-256 checksums](https://github.com/ChenC2002/ReTA/releases/download/V2.0/SHA256SUMS) | <1 KB | Verify the downloaded archives |
@@ -141,3 +141,8 @@ selection also uses validation only. Test inference reuses both choices.
 [Implementation notes](docs/workflow.md) cover retrieval, class weighting, resume,
 and independent seeds. [Setup and tests](docs/setup.md) cover dependency profiles
 and package verification. [Demo packaging](docs/demo.md) explains the release files.
+
+## License
+
+Code is released under the [MIT License](LICENSE). Clinical datasets, external
+knowledge resources, and pretrained model components retain their original terms.

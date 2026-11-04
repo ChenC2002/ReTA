@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "reta-healthcare"
 version = "2.0.0"
 description = "Learning when and how to augment longitudinal EHR graphs with external knowledge"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10,<3.14"
 dynamic = ["dependencies"]
 keywords = ["electronic health records", "graph neural networks", "reinforcement learning"]

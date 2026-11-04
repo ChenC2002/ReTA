@@ -2,7 +2,7 @@ name: Demo
 on:
   push:
     branches: [main]
-    paths: ['demo/**', 'reta/demo/static/**', 'scripts/build_demo.py', '.github/workflows/demo.yml']
+    paths: ['demo/**', 'reta/demo/static/**', 'scripts/build_demo.py', 'LICENSE', '.github/workflows/demo.yml']
   workflow_dispatch:
 permissions:
   contents: read
