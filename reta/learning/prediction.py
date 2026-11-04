@@ -221,6 +221,9 @@ class PredictionSession:
             xi=effective_soft_xi,
         )
         logits = predictor(h_G)
+        checked = [h_G, logits] + ([raw_logits] if raw_logits is not None else [])
+        if any(not torch.isfinite(value).all() for value in checked):
+            raise ValueError("The model produced non-finite scores for this history.")
 
         past_visit_embs.append(h_G[0].detach())
         if baseline_h_current is not None:

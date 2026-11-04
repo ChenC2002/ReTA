@@ -157,6 +157,11 @@ class TrainingIntegrationTests(unittest.TestCase):
             self.assertEqual(session.past_visit_embs, [])
             logits, _ = session.predict_visit(trajectories['d'][0])
             torch.testing.assert_close(logits, original_logits[0])
+            session.reset()
+            with mock.patch.object(session.predictor, 'forward', return_value=torch.full((1, 2), float('nan'))):
+                with self.assertRaisesRegex(ValueError, 'non-finite'):
+                    session.predict_visit(trajectories['d'][0])
+            session.reset()
             if self.use_text_features:
                 # Evaluation restores text features from the checkpoint itself.
                 Path(cfg.model.concept_features_path).unlink()
