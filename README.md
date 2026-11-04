@@ -55,6 +55,22 @@ evaluation workflow. Use `--out runs/toy-2` for a new run.
 python -m unittest discover -s tests -p 'test*.py'
 ```
 
+## Interactive Demo
+
+Use a trained checkpoint to explore editable example visits, retrieved knowledge,
+Soft/Hard/Skip decisions, and next-visit predictions in a local browser:
+
+```bash
+python -m pip install -r requirements-demo.txt
+python -m reta.demo --config configs/reta.yaml --checkpoint checkpoints/best.pt \
+  --icd2ccs data/resources/icd_to_ccs.csv \
+  --ccs-hierarchy data/resources/ccs_hierarchy.csv \
+  --descriptions data/knowledge/descriptions.json
+```
+
+Open `http://127.0.0.1:8765`. The demo uses the same prediction code as evaluation;
+its editable examples contain ICD-9-CM codes and no patient records.
+
 ## Required Inputs
 
 Full runs require credentialed MIMIC-III or MIMIC-IV diagnosis data, ICD-to-CCS

@@ -38,6 +38,7 @@ include = ["reta*"]
 namespaces = false
 
 [tool.setuptools.package-data]
+"reta.demo" = ["static/*.html", "static/*.css", "static/*.js"]
 "reta.knowledge" = [
   "releases/pool_v1/README.md",
   "releases/pool_v1/config.yaml",

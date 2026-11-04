@@ -131,6 +131,28 @@ class TrainingIntegrationTests(unittest.TestCase):
             report = json.loads((root / "inference.json").read_text())
             self.assertEqual(report["meta"]["prediction_threshold"], selection["selection"]["prediction_threshold"])
             self.assertEqual(report["meta"]["threshold_source"], "validation")
+            # Interactive predictions share evaluation code, never consume labels,
+            # and reset their causal memory between independent histories.
+            from reta.learning.prediction import load_prediction_session
+            session = load_prediction_session(str(root / "resumed/best.pt"), cfg.data.processed_path,
+                cfg.knowledge.templates_jsonl, cfg.knowledge.entity_to_token_json,
+                cfg.data.split_json, device=cfg.train.device)
+            original_logits = []
+            for visit in trajectories['d'][:-1]:
+                logits, _ = session.predict_visit(visit)
+                original_logits.append(logits)
+            session.reset()
+            for index, visit in enumerate(trajectories['d'][:-1]):
+                observation = {key: value for key, value in visit.items() if key != 'label_ccs'}
+                logits, trace = session.predict_visit(observation, trace=True)
+                torch.testing.assert_close(logits, original_logits[index])
+                self.assertEqual(len(trace['raw_probabilities']), 2)
+                self.assertTrue(trace['node_ids'])
+            self.assertEqual(len(session.past_visit_embs), 2)
+            session.reset()
+            self.assertEqual(session.past_visit_embs, [])
+            logits, _ = session.predict_visit(trajectories['d'][0])
+            torch.testing.assert_close(logits, original_logits[0])
             if self.use_text_features:
                 # Evaluation restores text features from the checkpoint itself.
                 Path(cfg.model.concept_features_path).unlink()

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ReTA · Import what you need</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/">ReTA<span>RESEARCH DEMO</span></a><div class="top-right"><span id="connection" class="status">Connecting</span><span class="version">V1.0</span></div></header>
+  <main>
+    <section class="intro"><div><div class="eyebrow">KNOWLEDGE, WHEN IT HELPS</div><h1>Import what you need.</h1><p>Follow a diagnosis history through retrieval, adaptive knowledge import,<br class="desktop"> and next-visit prediction.</p></div><div class="intro-note"><span class="note-line"></span><strong>One visit. One decision.</strong><p>Soft import · Hard import · Skip</p></div></section>
+    <div class="workspace">
+      <aside class="panel input-panel">
+        <div class="section-heading"><span class="number">01</span><h2>Visit history</h2><span class="tag">Example</span></div>
+        <label for="example">Start with an example</label><select id="example" disabled></select>
+        <div class="input-caption">ICD-9-CM codes, separated by commas. Each row represents one completed visit.</div>
+        <div id="visits"></div>
+        <button id="add-visit" class="quiet" type="button">＋ Add a visit</button>
+        <details class="lookup"><summary>Find a diagnosis code</summary><label for="search" class="sr-only">Search diagnosis names or codes</label><input id="search" placeholder="Search a name or code…" autocomplete="off"><div id="search-results"></div></details>
+        <button id="run" class="primary" disabled>Run prediction <span>↗</span></button>
+        <p id="error" class="error" role="alert" hidden></p>
+        <div class="input-footer"><span class="tiny-dot"></span>Real model inference · example inputs</div>
+      </aside>
+      <section class="analysis-area">
+        <div class="analysis-header"><div id="visit-tabs" role="tablist" aria-label="Prediction visit"></div><span id="latency" class="muted">Ready when you are</span></div>
+        <div id="empty-state" class="empty-state"><div class="empty-symbol">↗</div><h2>See the reasoning path.</h2><p>Run an example to inspect the retrieved knowledge,<br>the selected operation, and next-visit predictions.</p><div class="flow-preview"><span>History</span><i>→</i><span>Knowledge</span><i>→</i><span>Prediction</span></div></div>
+        <div id="output" hidden>
+          <div class="middle-grid">
+            <section class="panel retrieval-panel"><div class="section-heading"><span class="number">02</span><h2>Retrieved knowledge</h2><span id="retrieval-count" class="muted"></span></div><p class="small muted">Ranked by code and history similarity</p><div id="candidates"></div></section>
+            <section class="panel decision-panel"><div class="section-heading"><span class="number">03</span><h2>Policy decision</h2></div><div id="action" class="action"></div><p id="action-description"></p><div id="graph" aria-label="Current visit graph"></div><div class="legend"><span><i class="observed"></i>Observed code</span><span><i class="ontology"></i>Ontology</span><span><i class="imported"></i>Imported</span></div><div id="graph-counts" class="small muted"></div></section>
+          </div>
+          <section class="panel prediction-panel"><div class="prediction-heading"><div class="section-heading"><span class="number">04</span><h2>Next-visit diagnoses</h2></div><span class="small muted">Model scores, not calibrated clinical risks</span></div><div class="prediction-labels"><span>DIAGNOSIS CATEGORY</span><span>BEFORE → AFTER CURRENT IMPORT</span></div><div id="predictions"></div></section>
+        </div>
+      </section>
+    </div>
+    <section id="experiment" class="experiment" hidden><div><div class="eyebrow">REAL-DATA EXPERIMENT</div><h2>MIMIC-III</h2><p id="experiment-context"></p></div><div class="table-wrap"><table><thead><tr><th>Model</th><th>Macro-AUPRC</th><th>Micro-AUPRC</th><th>Micro-F1</th><th>Acc@20</th></tr></thead><tbody id="metrics"></tbody></table></div></section>
+    <footer><span>ReTA · Adaptive knowledge augmentation for longitudinal EHR graphs</span><span>PyTorch + PyG · Research use</span></footer>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
