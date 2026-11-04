@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use ReTA in your research, please cite the paper below."
+title: "ReTA: Import What You Need"
+type: software
+authors:
+  - family-names: Chen
+    given-names: Chen
+version: 2.0.0
+license: MIT
+repository-code: "https://github.com/ChenC2002/ReTA"
+url: "https://github.com/ChenC2002/ReTA"
+preferred-citation:
+  type: article
+  title: "Import What You Need: Learning When and How to Augment EHR Graphs with External Knowledge"
+  authors:
+    - family-names: Chen
+      given-names: Chen
+    - family-names: Nayebi Kerdabadi
+      given-names: Mohsen
+    - family-names: Wang
+      given-names: Dongjie
+    - family-names: Liu
+      given-names: Mei
+    - family-names: Yao
+      given-names: Zijun
+  year: 2026
+  journal: arXiv
+  doi: "10.48550/arXiv.2609.01839"
+  url: "https://arxiv.org/abs/2609.01839"

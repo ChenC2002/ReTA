@@ -6,7 +6,7 @@ It retrieves relevant templates, chooses **Soft Import**, **Hard Import**, or
 **Skip**, and predicts the next visit’s diagnosis categories from the evolving
 patient history.
 
-[Live Demo](https://chenc2002.github.io/ReTA/demo/) · [Method](#method) · [Data](#data) · [Workflow](#workflow)
+[Paper (arXiv)](https://arxiv.org/abs/2609.01839) · [Live Demo](https://chenc2002.github.io/ReTA/demo/) · [Method](#method) · [Data](#data) · [Workflow](#workflow)
 
 ## Demo
 
@@ -141,6 +141,23 @@ selection also uses validation only. Test inference reuses both choices.
 [Implementation notes](docs/workflow.md) cover retrieval, class weighting, resume,
 and independent seeds. [Setup and tests](docs/setup.md) cover dependency profiles
 and package verification. [Demo packaging](docs/demo.md) explains the release files.
+
+## Citation
+
+If you use ReTA in your research, please cite our paper:
+
+```bibtex
+@misc{chen2026import,
+  title         = {Import What You Need: Learning When and How to Augment {EHR} Graphs with External Knowledge},
+  author        = {Chen, Chen and Nayebi Kerdabadi, Mohsen and Wang, Dongjie and Liu, Mei and Yao, Zijun},
+  year          = {2026},
+  eprint        = {2609.01839},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  doi           = {10.48550/arXiv.2609.01839},
+  url           = {https://arxiv.org/abs/2609.01839}
+}
+```
 
 ## License
 
