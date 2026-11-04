@@ -22,7 +22,7 @@ experiment runners.
   outputs and past-visit memories are detached during policy rollouts; gradients
   do not pass through discrete retrieval or across the full patient trajectory.
 
-`model.concept_features_path: null` retains lookup embeddings for synthetic
+`model.concept_features_path: null` retains lookup embeddings for example
 fixtures and older checkpoints. The supplied training config enables text
 features. Cached features are embedded in new checkpoints, so inference does
 not need the original feature-cache file. Old lookup checkpoints remain readable

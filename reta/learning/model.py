@@ -73,7 +73,7 @@ class ConceptEmbedding(nn.Module):
         self.dim = int(dim)
         self.dropout = nn.Dropout(dropout)
         if text_features is None:
-            # Lightweight synthetic fixtures and existing lookup-table checkpoints.
+            # Lightweight example fixtures and existing lookup-table checkpoints.
             self.emb = nn.Embedding(self.vocab_size, self.dim, padding_idx=padding_idx)
             nn.init.xavier_uniform_(self.emb.weight)
             self.projection = nn.Identity()

@@ -47,7 +47,7 @@ python examples/run_toy.py
 ```
 
 This runs warm-up → policy training → validation selection → test inference
-on synthetic trajectories and synthetic cached features. Outputs go to `runs/toy`;
+on example trajectories and cached features. Outputs go to `runs/toy`;
 no model download is needed. Its scores are **not clinical results**. Use
 `--out runs/toy-2` for a new run.
 

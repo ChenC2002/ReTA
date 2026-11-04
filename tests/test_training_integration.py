@@ -1,4 +1,4 @@
-"""Synthetic two-stage training, exact CPU recovery and CUDA smoke validation.
+"""Example two-stage training, exact CPU recovery and CUDA smoke validation.
 
 No clinical data or paper-performance assertions are used here.
 """

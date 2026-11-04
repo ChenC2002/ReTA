@@ -23,6 +23,6 @@ python -m pip install build
 python -m build
 ```
 
-Tests use synthetic inputs and a tiny local Transformer; no model download is
+Tests use example inputs and a tiny local Transformer; no model download is
 required. Real pool/feature construction loads the pinned Bio_ClinicalBERT model
 and needs either a download or a populated local model cache.

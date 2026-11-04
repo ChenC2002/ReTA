@@ -113,7 +113,7 @@ def main():
     ).to(device)
     if cfg.model.concept_features_path is None:
         aligned_index.initialize_embedding_table(encoder.embed.emb.weight)
-        logger.info("Using lookup embeddings (synthetic/legacy mode); configure concept_features_path for Eq. 1.")
+        logger.info("Using lookup embeddings (example/legacy mode); configure concept_features_path for Eq. 1.")
     code_embed_lookup = encoder_code_embedding_lookup(encoder)
 
     predictor = NextVisitPredictor(

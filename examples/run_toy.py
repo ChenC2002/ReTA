@@ -1,6 +1,6 @@
 """Run the core pipeline without clinical data or model downloads.
 
-All trajectories, labels, and cached text features are synthetic. The resulting
+The trajectories, labels, and cached text features are example inputs. The resulting
 metrics check software wiring only; they have no clinical interpretation.
 """
 from dataclasses import asdict
@@ -20,7 +20,7 @@ from reta.learning.select_checkpoint import select_checkpoint
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", default="runs/toy", help="New directory for synthetic inputs and outputs")
+    parser.add_argument("--out", default="runs/toy", help="New directory for example inputs and outputs")
     args = parser.parse_args()
     root = Path(args.out).resolve()
     root.mkdir(parents=True, exist_ok=False)
@@ -64,7 +64,7 @@ def main():
     result = run_inference(str(checkpoints / "best.pt"), cfg.data.processed_path,
                            cfg.knowledge.templates_jsonl, cfg.knowledge.entity_to_token_json,
                            cfg.data.split_json, "test", device="cpu", out_path=str(root / "inference.json"))
-    print("Synthetic workflow completed (not clinical results):")
+    print("Example workflow completed (not clinical results):")
     print(json.dumps(result["metrics"], indent=2))
     print(f"Outputs: {root}")
 
