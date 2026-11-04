@@ -252,8 +252,9 @@ function renderExperiment(results) {
   $('experiment-context').textContent = results.context || 'Patient-disjoint evaluation · next-visit CCS diagnosis prediction';
   for (const [key, value] of Object.entries(results.metrics)) {
     const row = node('tr', undefined, key === 'stage2' ? 'highlight' : '');
-    row.append(node('td', {
+    row.append(node('td', results.labels?.[key] || {
       training_prevalence: 'Diagnosis frequency',
+      linear_history: 'Linear history model',
       stage1: 'Stage 1',
       stage2: 'ReTA · Stage 2'
     } [key] || key));
