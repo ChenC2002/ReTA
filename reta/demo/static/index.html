@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="./">ReTA<span>Diagnosis explorer · V2.0</span></a><nav class="top-right" aria-label="Demo views"><button id="explorer-tab" class="view-tab active" aria-pressed="true">Explorer</button><button id="experiment-tab" class="view-tab" aria-pressed="false" hidden>Experiment</button><a href="https://github.com/ChenC2002/ReTA" aria-label="GitHub repository">GitHub ↗</a></nav></header>
+  <header class="topbar"><a class="brand" href="./"><svg class="brand-mark" viewBox="0 0 36 36" aria-hidden="true"><path d="M11 25V13h14M11 19h14"/><circle cx="11" cy="11" r="3"/><circle cx="11" cy="25" r="3"/><circle cx="25" cy="13" r="3"/><path d="M25 22v6m-3-3h6"/></svg><b>ReTA</b><span>Diagnosis explorer · V2.0</span></a><nav class="top-right" aria-label="Demo views"><button id="explorer-tab" class="view-tab active" aria-pressed="true">Explorer</button><button id="experiment-tab" class="view-tab" aria-pressed="false" hidden>Experiment</button><a href="https://github.com/ChenC2002/ReTA" aria-label="GitHub repository">GitHub ↗</a></nav></header>
   <main>
     <section id="explorer-view">
     <section class="intro"><div><div class="eyebrow" id="model-label">ADAPTIVE KNOWLEDGE IMPORT</div><h1>Next-visit diagnoses</h1></div><span id="connection" class="status">Connecting</span></section>
@@ -48,7 +48,16 @@
       </section>
     </div>
     </section>
-    <section id="experiment" class="experiment" hidden><div><div class="eyebrow">HELD-OUT EVALUATION</div><h2>MIMIC-III</h2><p id="experiment-context"></p><p id="experiment-model" class="model-note" hidden></p></div><div class="table-wrap"><table><thead><tr><th scope="col">Model</th><th scope="col">Macro-AUPRC</th><th scope="col">Micro-AUPRC</th><th scope="col">Micro-F1</th><th scope="col">Acc@20</th></tr></thead><tbody id="metrics"></tbody></table><p class="small muted">Checkpoint and F1 threshold selected on validation. Aggregate test results. Example histories have no known next visit and are separate from this evaluation.</p></div></section>
+    <section id="experiment-view" class="experiment" aria-labelledby="experiment-title" hidden>
+      <div class="experiment-heading"><div><div class="eyebrow">RECORDED EXPERIMENT</div><h1 id="experiment-title">MIMIC-III / Next-visit diagnosis</h1></div><span class="experiment-badge">Held-out evaluation</span></div>
+      <dl id="cohort-stats" class="cohort-stats"></dl>
+      <section class="result-summary" aria-label="Released model results"><div class="result-model"><h2 id="experiment-model"></h2><p id="model-description"></p></div><div id="headline-metrics" class="headline-metrics"></div></section>
+      <section class="comparison-section" aria-labelledby="comparison-title"><div class="comparison-heading"><h2 id="comparison-title">Model comparison</h2><span>Same cohort · same evaluation</span></div>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Model comparison metrics"><table><thead><tr><th scope="col">Model</th><th scope="col">Macro-AUPRC</th><th scope="col">Micro-AUPRC</th><th scope="col">Micro-F1</th><th scope="col">Acc@20</th></tr></thead><tbody id="metrics"></tbody></table></div>
+        <p class="table-note">Scores are evaluated on held-out patient histories. Higher is better.</p>
+      </section>
+      <details class="experiment-details"><summary>About this experiment <span aria-hidden="true">＋</span></summary><div class="experiment-details-body"><p id="experiment-context"></p><p>Checkpoint and prediction threshold are selected on validation. The history-fusion model combines graph predictions with a diagnosis-history model.</p><p>Example histories illustrate inference; they are separate from this evaluation.</p><a href="https://github.com/ChenC2002/ReTA/blob/main/docs/workflow.md#optional-demo-history-head">Model and evaluation workflow ↗</a></div></details>
+    </section>
     <footer><span>Research use · No patient records shown</span><a href="https://github.com/ChenC2002/ReTA#demo">Download model &amp; run locally ↗</a></footer>
   </main>
   <script src="./app.js" defer></script>

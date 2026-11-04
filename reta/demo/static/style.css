@@ -1,11 +1,11 @@
 :root {
-  --bg: #f5f5f1;
+  --bg: #f7f8f7;
   --card: #fff;
-  --ink: #182f35;
+  --ink: #23312d;
   --muted: #687673;
   --line: #e1e6e1;
-  --accent: #177d6c;
-  --mint: #e9f5ee;
+  --accent: #496e5c;
+  --mint: #edf4ef;
   --navy: #24434d;
 }
 * { box-sizing: border-box; }
@@ -20,17 +20,20 @@ a:hover { text-decoration: underline; }
 .sr-only { position: absolute; left: -10000px; }
 .muted { color: var(--muted); font-size: 11px; }
 .small { font-size: 10px; }
-.eyebrow { color: var(--accent); font-size: 10px; font-weight: 650; letter-spacing: 2px; }
+.eyebrow { color: var(--accent); font-size: 10px; font-weight: 650; letter-spacing: 1.1px; }
 
 /* Navigation and page layout. */
-.topbar { height: 66px; padding: 0 4%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: #fbfcf9; }
-.brand { color: var(--ink); font-size: 27px; font-weight: 750; letter-spacing: -1.2px; }
-.brand span { color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; margin-left: 20px; }
+.topbar { height: 76px; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); background: #fff; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-size: 25px; letter-spacing: -.8px; }
+.brand:hover { text-decoration: none; }
+.brand b { font-weight: 750; }
+.brand-mark { width: 35px; height: 35px; padding: 3px; background: var(--accent); border-radius: 6px; stroke: #fff; stroke-width: 1.5; fill: none; }
+.brand span { color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; margin-left: 14px; padding-left: 22px; border-left: 1px solid var(--line); }
 .top-right { display: flex; align-self: stretch; gap: 24px; font-size: 12px; }
 .top-right>a { align-self: center; color: var(--muted); }
 .view-tab { border: 0; border-bottom: 2px solid transparent; color: var(--muted); background: transparent; padding: 0 2px; font-size: 12px; }
 .view-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
-main { max-width: 1460px; margin: auto; padding: 20px 4%; }
+main { max-width: 1400px; margin: auto; padding: 24px 32px; }
 .intro { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 h1 { font-size: 27px; font-weight: 550; letter-spacing: -.7px; line-height: 1.2; margin: 5px 0 0; }
 .status { font-size: 12px; color: var(--muted); }
@@ -140,17 +143,39 @@ input { width: 100%; min-height: 42px; border: 1px solid #dce3dc; border-radius:
 #graph-counts { margin-top: 7px; font-size: 10px; }
 #graph-selection { min-height: 28px; line-height: 1.6; }
 
-/* Aggregate evaluation is kept separate from individual examples. */
-.experiment { display: grid; grid-template-columns: 240px minmax(0,1fr); gap: 36px; padding: 24px; background: var(--card); border-radius: 8px; }
-.experiment h2 { font-size: 23px; font-weight: 500; letter-spacing: -.6px; margin: 6px 0; }
-.experiment p { font-size: 11px; color: var(--muted); line-height: 1.8; margin: 0; }
-.experiment .model-note { margin-top: 12px; color: var(--ink); }
+/* Experiment: cohort, primary results, then the full comparison. */
+.experiment-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.experiment-heading h1 { font-size: 26px; font-weight: 620; margin-top: 7px; }
+.experiment-badge { border: 1px solid var(--line); border-radius: 4px; background: #eef2ee; color: #57675e; padding: 5px 9px; font-size: 11px; white-space: nowrap; }
+.cohort-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 24px; margin: 24px 0 0; padding: 10px 0 20px; border-bottom: 1px solid var(--line); }
+.cohort-stats dt { font-size: 12px; color: var(--muted); }
+.cohort-stats dd { font-size: 31px; line-height: 1.3; font-weight: 600; letter-spacing: -.8px; margin: 7px 0 0; font-variant-numeric: tabular-nums; }
+.result-summary { display: grid; grid-template-columns: 1fr 1.35fr; align-items: center; gap: 30px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.result-model h2 { font-size: 14px; font-weight: 650; margin: 0 0 7px; }
+.result-model p { color: var(--muted); font-size: 12px; margin: 0; }
+.headline-metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; }
+.headline-metric span { color: var(--muted); font-size: 11px; }
+.headline-metric strong { display: block; color: var(--accent); font-size: 29px; font-weight: 650; line-height: 1.3; letter-spacing: -.7px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.comparison-section { margin-top: 25px; }
+.comparison-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 15px; }
+.comparison-heading h2 { margin: 0; font-size: 14px; font-weight: 650; }
+.comparison-heading span { font-size: 11px; color: var(--muted); }
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: right; }
-th { font-size: 10px; font-weight: 500; color: var(--muted); padding: 8px 12px; white-space: nowrap; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+thead { background: #edf1ed; }
+thead th { font-size: 10px; font-weight: 500; color: #59695f; padding: 12px 16px; white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; }
-td { padding: 10px 12px; border-top: 1px solid var(--line); }
-tr.highlight { background: #eaf2e8; color: #226b55; }
+tbody th, td { padding: 13px 16px; border-bottom: 1px solid var(--line); background: #fff; }
+tbody th { font-size: 12px; font-weight: 400; white-space: nowrap; }
+tr.highlight th, tr.highlight td { background: #edf5ef; color: #355e49; font-weight: 600; }
+.model-tag { display: inline-block; font-size: 9px; font-weight: 500; padding: 1px 6px; border: 1px solid #c9dacc; border-radius: 3px; margin-left: 10px; vertical-align: middle; }
+.table-note { font-size: 11px; color: var(--muted); margin: 12px 0 0; }
+.experiment-details { border-top: 1px solid var(--line); margin-top: 24px; }
+.experiment-details>summary { display: flex; justify-content: space-between; align-items: center; list-style: none; font-size: 12px; color: var(--muted); padding: 17px 0; }
+.experiment-details>summary::-webkit-details-marker { display: none; }
+.experiment-details[open]>summary span { transform: rotate(45deg); }
+.experiment-details-body { max-width: 760px; padding: 0 0 18px; font-size: 12px; line-height: 1.8; color: var(--muted); }
+.experiment-details-body p { margin: 0 0 10px; }
 footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 25px; margin-top: 10px; font-size: 10px; color: var(--muted); }
 
 @media(min-width:1400px) {
@@ -163,11 +188,11 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 
   .panel { padding: 17px; }
   .middle-grid { gap: 12px; }
   .prediction-row { grid-template-columns: minmax(100px,1fr) 70px 100px; gap: 9px; }
-  .experiment { grid-template-columns: 200px minmax(0,1fr); gap: 20px; }
+  .result-summary { grid-template-columns: 1fr 1.5fr; gap: 20px; }
 }
 @media(max-width:760px) {
   main { padding: 22px 16px; }
-  .topbar { height: 62px; }
+  .topbar { height: 64px; padding: 0 16px; }
   .brand span { display: none; }
   .top-right { gap: 16px; }
   .intro { align-items: flex-start; gap: 12px; }
@@ -183,8 +208,19 @@ footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 
   .prediction-heading h2 { font-size: 18px; }
   .prediction-row { padding: 12px 0; }
   .empty-state { min-height: 260px; }
-  .experiment { display: block; padding: 18px; }
-  .table-wrap { margin-top: 18px; }
+  .experiment-heading { align-items: flex-start; }
+  .experiment-heading h1 { font-size: 23px; max-width: 300px; }
+  .experiment-badge { display: none; }
+  .cohort-stats { grid-template-columns: repeat(2,1fr); gap: 24px 20px; margin-top: 22px; padding-bottom: 22px; }
+  .cohort-stats dd { font-size: 29px; }
+  .result-summary { grid-template-columns: 1fr; gap: 22px; padding: 22px 0; }
+  .headline-metrics { gap: 12px; }
+  .headline-metric strong { font-size: 25px; }
+  .comparison-heading span { display: none; }
+  thead th, tbody th, td { padding: 12px; }
+  table { min-width: 650px; }
+  .comparison-section { margin-top: 22px; }
+  .experiment-details { margin-top: 20px; }
   footer { display: block; }
   footer span { display: block; margin-bottom: 7px; }
 }

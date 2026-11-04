@@ -7,9 +7,9 @@ shows example predictions and optional knowledge details; the Experiment view
 contains aggregate held-out metrics. New inputs use the local
 model, while the online viewer displays recorded inference.
 
-The released demo combines ReTA with a frozen linear diagnosis-history head.
-A validation-selected blend of their logits supplies both the final scores and
-the before/after import comparison. The history head uses only observed visits;
+The released demo uses **ReTA with diagnosis-history fusion**. The combination
+is selected on validation and supplies both the final scores and the before/after
+import comparison. The history head uses only observed visits;
 its weights and vocabulary contract are included in the complete checkpoint.
 
 ## Run the complete checkpoint

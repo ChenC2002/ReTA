@@ -22,14 +22,15 @@ demo also accepts edited inputs.
 
 | Package | Size | Contents |
 | --- | ---: | --- |
-| [Offline viewer](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-offline.zip) | 15.6 KB | Open `index.html`; includes all three recorded examples and evaluation |
+| [Offline viewer](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-offline.zip) | 16.9 KB | Open `index.html`; includes all three recorded examples and evaluation |
 | [Complete demo model](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-model.zip) | 139.2 MB | Both prediction branches, knowledge resources, configuration, and reference predictions |
 | [Core ReTA model](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-core-model.zip) | 129.5 MB | Original graph model and import policy, with the same portable resources |
 | [SHA-256 checksums](https://github.com/ChenC2002/ReTA/releases/download/V2.0/SHA256SUMS) | <1 KB | Verify the downloaded archives |
 
-The demo combines ReTA with a linear diagnosis-history model; the core ReTA
-package is also available. Both include complete checkpoints and cached concept features.
-The package contains no patient records.
+The demo uses **ReTA with diagnosis-history fusion**. The core ReTA model is
+also available separately. Both packages include complete checkpoints and cached
+concept features, with no patient records.
+[View the experiment](https://chenc2002.github.io/ReTA/demo/#experiment) for evaluation details.
 
 <details>
 <summary>Run locally (Python 3.10–3.13)</summary>
@@ -53,32 +54,6 @@ reta demo --bundle /path/to/reta-demo-model
 
 Open `http://127.0.0.1:8765`. CPU inference is sufficient. `--verify` checks
 the package and reproduces all three recorded examples.
-
-</details>
-
-<details>
-<summary>MIMIC-III experiment</summary>
-
-The demo was trained on a **7,494-patient MIMIC-III cohort**, with frozen
-ClinicalBERT concept features and 196 CCS ontology templates. Held-out evaluation
-covers **1,499 patients and 2,518 next-visit predictions**, across 283 labels.
-
-The released demo uses **25% ReTA and 75% linear-history logits**, selected on
-validation. Both branches are fitted on training patients. The table reports the
-core algorithm and this engineering variant separately.
-
-| Model | Macro-AUPRC | Micro-F1 | Acc@20 |
-| --- | ---: | ---: | ---: |
-| Diagnosis frequency | 4.32% | 33.53% | 44.56% |
-| Linear history model | 21.70% | 48.88% | 63.46% |
-| ReTA encoder | 18.64% | 43.04% | 58.16% |
-| ReTA adaptive knowledge | 18.82% | 44.06% | 59.05% |
-| ReTA + linear history | **22.32%** | **49.65%** | **64.14%** |
-
-These are results of the released demo experiment: a patient-disjoint split,
-seed 42, and validation-selected checkpoint and F1 threshold. The table evaluates held-out
-patient trajectories; demo histories illustrate inference. See the
-[history-head workflow](docs/workflow.md#optional-demo-history-head) to fit the optional demo variant.
 
 </details>
 

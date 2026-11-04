@@ -270,19 +270,49 @@ function renderExperiment(results) {
   if (!results || !results.metrics) return;
   $('experiment-tab').hidden = false;
   $('experiment-context').textContent = results.context || 'Patient-disjoint evaluation · next-visit CCS diagnosis prediction';
-  if (results.fusion) {
-    $('experiment-model').hidden = false;
-    $('experiment-model').textContent = 'Demo: ReTA + linear history, with the blend selected on validation.';
+  const selected = results.highlighted_model || 'stage2';
+  const scores = results.metrics[selected];
+  const modelNames = {
+    training_prevalence: 'Diagnosis frequency',
+    linear_history: 'Diagnosis-history baseline',
+    stage1: 'ReTA · encoder',
+    stage2: 'ReTA · adaptive knowledge',
+    fusion: 'ReTA · history fusion'
+  };
+  const label = key => modelNames[key] || results.labels?.[key] || key;
+  $('experiment-model').textContent = label(selected);
+  $('model-description').textContent = selected === 'fusion'
+    ? 'Graph predictions with diagnosis-history fusion'
+    : 'Visit-level knowledge augmentation';
+  $('cohort-stats').replaceChildren();
+  for (const [title, value] of [
+    ['Test patients', scores?.num_patients],
+    ['Next-visit predictions', scores?.num_samples],
+    ['Diagnosis categories', scores?.num_labels],
+    ['Knowledge templates', metadata.templates]
+  ]) {
+    if (!Number.isFinite(value)) continue;
+    const stat = node('div');
+    stat.append(node('dt', title), node('dd', value.toLocaleString('en-US')));
+    $('cohort-stats').append(stat);
   }
+  $('headline-metrics').replaceChildren();
+  for (const [key, title] of [['AUPRC_macro', 'Macro-AUPRC'], ['MicroF1', 'Micro-F1'], ['Acc@20', 'Acc@20']]) {
+    if (!Number.isFinite(scores?.[key])) continue;
+    const metric = node('div', undefined, 'headline-metric');
+    metric.append(node('span', title), node('strong', `${(scores[key] * 100).toFixed(2)}%`));
+    $('headline-metrics').append(metric);
+  }
+  $('metrics').replaceChildren();
   for (const [key, value] of Object.entries(results.metrics)) {
-    const row = node('tr', undefined, key === (results.highlighted_model || 'stage2') ? 'highlight' : '');
-    row.append(node('td', results.labels?.[key] || {
-      training_prevalence: 'Diagnosis frequency',
-      linear_history: 'Linear history model',
-      stage1: 'Stage 1',
-      stage2: 'ReTA · Stage 2'
-    } [key] || key));
-    for (const metric of ['AUPRC_macro', 'AUPRC_micro', 'MicroF1', 'Acc@20']) row.append(node('td', `${(value[metric] * 100).toFixed(2)}%`));
+    const row = node('tr', undefined, key === selected ? 'highlight' : '');
+    const name = node('th', label(key));
+    name.scope = 'row';
+    if (key === selected) name.append(node('span', 'Demo', 'model-tag'));
+    row.append(name);
+    for (const metric of ['AUPRC_macro', 'AUPRC_micro', 'MicroF1', 'Acc@20']) {
+      row.append(node('td', Number.isFinite(value[metric]) ? `${(value[metric] * 100).toFixed(2)}%` : '—'));
+    }
     $('metrics').append(row);
   }
 }
@@ -301,7 +331,7 @@ $('show-more').onclick = () => { showAll = !showAll; renderVisit(activeVisit); }
 function showView(view) {
   const experiment = view === 'experiment' && metadata?.results?.metrics;
   $('explorer-view').hidden = Boolean(experiment);
-  $('experiment').hidden = !experiment;
+  $('experiment-view').hidden = !experiment;
   for (const name of ['explorer', 'experiment']) {
     const active = name === (experiment ? 'experiment' : 'explorer');
     $(`${name}-tab`).classList.toggle('active', active);
@@ -344,7 +374,7 @@ $('search').oninput = () => {
 (async () => {
   try {
     metadata = await request('/api/meta');
-    if (metadata.history_fusion) $('model-label').textContent = metadata.prediction_model.toUpperCase();
+    if (metadata.history_fusion) $('model-label').textContent = 'RETA WITH DIAGNOSIS-HISTORY FUSION';
     if (window.matchMedia('(max-width: 760px)').matches) $('observed-details').open = false;
     if (recorded) {
       $('add-visit').hidden = true;
