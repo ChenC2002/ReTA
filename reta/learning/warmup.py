@@ -66,11 +66,15 @@ def build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Stage 1 warm-up training for encoder.")
     p.add_argument("--config", type=str, default=None)
     p.add_argument("--resume", type=str, default=None, help="Resume an epoch-boundary checkpoint")
+    p.add_argument("--save-every", type=int, default=0,
+                   help="Keep a warmup_epochN.pt every N epochs and at the end (0: latest only)")
     return p
 
 
 def main():
     args = build_argparser().parse_args()
+    if args.save_every < 0:
+        raise ValueError("--save-every must be non-negative.")
     cfg = load_config(args.config)
     logger = setup_logger(cfg.outputs.logs_dir, name="warmup")
     set_seed(cfg.train.seed)
@@ -308,16 +312,16 @@ def main():
         )
 
         checkpoint_path = os.path.join(cfg.outputs.checkpoints_dir, "warmup.pt")
-        atomic_save(
-            {
-                "encoder": encoder.state_dict(),
-                "predictor": predictor.state_dict(),
-                "cfg": asdict(cfg),
-                "contract": contract,
-                "training_state": training_state("warmup", epoch + 1, {"encoder": opt}),
-            },
-            checkpoint_path,
-        )
+        checkpoint = {
+            "encoder": encoder.state_dict(),
+            "predictor": predictor.state_dict(),
+            "cfg": asdict(cfg),
+            "contract": contract,
+            "training_state": training_state("warmup", epoch + 1, {"encoder": opt}),
+        }
+        atomic_save(checkpoint, checkpoint_path)
+        if args.save_every and ((epoch + 1) % args.save_every == 0 or epoch + 1 == cfg.train.warmup_epochs):
+            atomic_save(checkpoint, os.path.join(cfg.outputs.checkpoints_dir, f"warmup_epoch{epoch+1}.pt"))
         logger.info(f"saved {checkpoint_path}")
 
 

@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest import mock
+from types import SimpleNamespace
 
 import torch
 
@@ -13,6 +14,36 @@ from reta.learning.select_checkpoint import select_checkpoint
 
 
 class TrainingValidationTests(unittest.TestCase):
+    def test_inference_output_cannot_replace_resources_even_through_a_symlink(self):
+        from reta.learning.inference import run_inference
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = [root / name for name in ('model.pt', 'processed.pt', 'pool.jsonl', 'split.json', 'entities.json', 'features.pt')]
+            for path in paths:
+                path.write_bytes(b'original resource')
+            alias = root / 'report.json'
+            alias.symlink_to(paths[0])
+            session = SimpleNamespace(effective_split_json=str(paths[3]),
+                cfg={'knowledge': {'entity_to_token_json': str(paths[4])},
+                     'model': {'concept_features_path': str(paths[5])}})
+            with mock.patch('reta.learning.inference.load_processed_data', return_value={'trajectories': {}}), \
+                    mock.patch('reta.learning.inference.load_prediction_session', return_value=session), \
+                    mock.patch('reta.learning.inference.select_patient_ids') as select:
+                for output in [*paths, alias]:
+                    with self.assertRaisesRegex(ValueError, 'must not overwrite'):
+                        run_inference(str(paths[0]), str(paths[1]), str(paths[2]), None, None,
+                                      'test', out_path=str(output))
+                select.assert_not_called()
+            for path in paths:
+                self.assertEqual(path.read_bytes(), b'original resource')
+
+    def test_negative_snapshot_interval_fails_before_loading_data(self):
+        import sys
+        from reta.learning.warmup import main
+        with mock.patch.object(sys, 'argv', ['warmup', '--save-every', '-1']):
+            with self.assertRaisesRegex(ValueError, 'save-every'):
+                main()
+
     def test_shipped_training_config_loads_with_numeric_learning_rates(self):
         config = Path(__file__).resolve().parents[1] / 'configs' / 'reta.yaml'
         cfg = load_config(str(config))

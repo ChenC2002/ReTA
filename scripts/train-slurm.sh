@@ -31,9 +31,13 @@ path.write_text(yaml.safe_dump(asdict(cfg)))
 print(path)
 PY
 )
-python -m reta.learning.warmup --config "$run_config"
-python -m reta.learning.rl_train --config "$run_config"
 run_dir=$(dirname "$run_config")
+python -m reta.learning.warmup --config "$run_config" --save-every 5
+python -m reta.learning.select_checkpoint --config "$run_config" \
+  --checkpoints "$run_dir"/checkpoints/warmup_epoch*.pt \
+  --out "$run_dir/checkpoints/warmup_best.pt" --report "$run_dir/warmup-selection.json"
+python -m reta.learning.rl_train --config "$run_config" \
+  --warmup_ckpt "$run_dir/checkpoints/warmup_best.pt"
 python -m reta.learning.select_checkpoint --config "$run_config" \
   --checkpoints "$run_dir"/checkpoints/rl_iter*.pt \
   --out "$run_dir/checkpoints/best.pt" --report "$run_dir/selection.json"

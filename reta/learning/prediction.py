@@ -127,6 +127,7 @@ class PredictionSession:
         candidates = []
         candidate_scores = []
         raw_logits = None
+        h_G_raw = None
         mem = (
             torch.stack(past_visit_embs, dim=0)
             if past_visit_embs
@@ -192,9 +193,9 @@ class PredictionSession:
             )
             act = decode_policy_action(int(a.item()), candidates, policy_K)
 
-            if act is not None and act.is_skip:
+            if act.is_skip:
                 action_name = "skip"
-            elif act is not None:
+            else:
                 tmpl = pool.get_template(act.template_id)
                 template_id = int(act.template_id)
 
@@ -214,15 +215,18 @@ class PredictionSession:
                     else:
                         action_name = "hard_noop"
 
-        # encode augmented and predict
-        bg = Batch.from_data_list([g_aug]).to(device_t)
-        soft_offset = soft_vec.view(1, -1).to(device_t) if soft_vec is not None else None
-        h_G, _ = encoder(
-            bg,
-            past_visit_memory=[mem],
-            soft_offset_per_graph=soft_offset,
-            xi=effective_soft_xi,
-        )
+        # Skip and ineffective Hard Import reuse the raw encoding in eval mode.
+        if h_G_raw is not None and g_aug is g_raw and soft_vec is None:
+            h_G = h_G_raw
+        else:
+            bg = Batch.from_data_list([g_aug]).to(device_t)
+            soft_offset = soft_vec.view(1, -1).to(device_t) if soft_vec is not None else None
+            h_G, _ = encoder(
+                bg,
+                past_visit_memory=[mem],
+                soft_offset_per_graph=soft_offset,
+                xi=effective_soft_xi,
+            )
         logits = predictor(h_G)
         history_head = getattr(predictor, 'history_head', None)
         updated_history = self.observed_history

@@ -9,7 +9,10 @@ import json
 import math
 from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence
+
+
+from .pool import strict_json_loads
 
 
 REQUIRED_RELEASE_FILES = frozenset(
@@ -64,39 +67,10 @@ class ValidationReport:
         return "\n".join(lines)
 
 
-def _reject_json_constant(value: str) -> None:
-    raise ValueError(f"non-finite JSON number {value!r} is not permitted")
-
-
-def _parse_finite_json_float(value: str) -> float:
-    parsed = float(value)
-    if not math.isfinite(parsed):
-        _reject_json_constant(value)
-    return parsed
-
-
-def _reject_duplicate_json_keys(pairs: Sequence[Tuple[str, Any]]) -> Dict[str, Any]:
-    value: Dict[str, Any] = {}
-    for key, item in pairs:
-        if key in value:
-            raise ValueError(f"duplicate JSON object key {key!r} is not permitted")
-        value[key] = item
-    return value
-
-
-def _strict_json_loads(text: str) -> Any:
-    return json.loads(
-        text,
-        parse_constant=_reject_json_constant,
-        parse_float=_parse_finite_json_float,
-        object_pairs_hook=_reject_duplicate_json_keys,
-    )
-
-
 def _load_json(path: Path, report: ValidationReport, code: str) -> Optional[Any]:
 
     try:
-        return _strict_json_loads(path.read_text(encoding="utf-8"))
+        return strict_json_loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         report.add("error", code, f"{path}: {exc}")
         return None
@@ -109,7 +83,7 @@ def _load_config(path: Path, report: ValidationReport) -> Optional[Dict[str, Any
         report.add("error", "config_read_error", f"{path}: {exc}")
         return None
     try:
-        value = _strict_json_loads(text)
+        value = strict_json_loads(text)
     except json.JSONDecodeError:
         try:
             import yaml
@@ -126,12 +100,6 @@ def _load_config(path: Path, report: ValidationReport) -> Optional[Dict[str, Any
                     return mapping
 
             value = yaml.load(text, Loader=UniqueKeySafeLoader)
-        except ModuleNotFoundError:
-            try:
-                value = _parse_simple_yaml(text)
-            except Exception as exc:
-                report.add("error", "config_parse_error", f"{path}: {exc}")
-                return None
         except Exception as exc:
             report.add("error", "config_parse_error", f"{path}: {exc}")
             return None
@@ -155,82 +123,6 @@ def _contains_nonfinite_number(value: Any) -> bool:
     if isinstance(value, (list, tuple)):
         return any(_contains_nonfinite_number(item) for item in value)
     return False
-
-
-def _yaml_scalar(value: str) -> Any:
-    value = value.strip()
-    lowered = value.lower()
-    if lowered in {".nan", ".inf", "+.inf", "-.inf"}:
-        return float(lowered.replace(".", "", 1))
-    if value in {"null", "Null", "NULL", "~"}:
-        return None
-    if lowered == "true":
-        return True
-    if lowered == "false":
-        return False
-    if value.startswith('"') and value.endswith('"'):
-        return json.loads(value)
-    if value.startswith("'") and value.endswith("'"):
-        return value[1:-1].replace("''", "'")
-    if re.fullmatch(r"[-+]?\d+", value):
-        return int(value)
-    if re.fullmatch(r"[-+]?(?:\d+\.\d*|\.\d+)(?:[eE][-+]?\d+)?", value):
-        return float(value)
-    return value
-
-
-def _parse_simple_yaml(text: str) -> Any:
-    """Parse the release's mapping/list/scalar YAML subset without PyYAML."""
-    tokens: List[Tuple[int, str]] = []
-    for line_no, raw in enumerate(text.splitlines(), start=1):
-        if not raw.strip() or raw.lstrip().startswith("#"):
-            continue
-        if "\t" in raw[: len(raw) - len(raw.lstrip())]:
-            raise ValueError(f"line {line_no}: tabs are unsupported")
-        indent = len(raw) - len(raw.lstrip(" "))
-        content = raw.strip()
-        if " #" in content:
-            content = content.split(" #", 1)[0].rstrip()
-        tokens.append((indent, content))
-    if not tokens:
-        return {}
-
-    def parse_block(position: int, indent: int) -> Tuple[Any, int]:
-        is_list = tokens[position][1].startswith("- ")
-        container: Any = [] if is_list else {}
-        while position < len(tokens):
-            current_indent, content = tokens[position]
-            if current_indent < indent:
-                break
-            if current_indent != indent:
-                raise ValueError(f"unexpected indentation near {content!r}")
-            if is_list:
-                if not content.startswith("- "):
-                    raise ValueError("cannot mix YAML list and mapping entries")
-                container.append(_yaml_scalar(content[2:]))
-                position += 1
-                continue
-            if content.startswith("- ") or ":" not in content:
-                raise ValueError(f"expected mapping entry near {content!r}")
-            key, raw_value = content.split(":", 1)
-            key = key.strip()
-            raw_value = raw_value.strip()
-            if key in container:
-                raise ValueError(f"duplicate YAML mapping key {key!r} is not permitted")
-            position += 1
-            if raw_value:
-                container[key] = _yaml_scalar(raw_value)
-            elif position < len(tokens) and tokens[position][0] > indent:
-                child, position = parse_block(position, tokens[position][0])
-                container[key] = child
-            else:
-                container[key] = None
-        return container, position
-
-    parsed, end = parse_block(0, tokens[0][0])
-    if end != len(tokens):
-        raise ValueError("trailing YAML content")
-    return parsed
 
 
 def _safe_file(root: Path, relative: str, report: ValidationReport) -> Optional[Path]:

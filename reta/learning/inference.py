@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 import warnings
 from typing import Dict, List, Optional
 
@@ -192,6 +193,13 @@ def run_inference(
         checkpoint_path, processed_path, templates_jsonl, entity_to_token_json,
         split_json, device, retrieval_K, soft_xi, seed, data=data,
     )
+    if out_path is not None:
+        resource_paths = (checkpoint_path, processed_path, templates_jsonl,
+                          session.effective_split_json, entity_to_token_json,
+                          session.cfg.get("knowledge", {}).get("entity_to_token_json"),
+                          session.cfg.get("model", {}).get("concept_features_path"))
+        if Path(out_path).resolve() in {Path(path).resolve() for path in resource_paths if path}:
+            raise ValueError("Inference output must not overwrite a model or data input.")
     if calibrate_threshold and (not session.effective_split_json or session.training_split != "train"):
         raise ValueError("Threshold calibration requires held-out validation patients and train-only fitting.")
     pids = select_patient_ids(list(trajectories), session.effective_split_json, split)

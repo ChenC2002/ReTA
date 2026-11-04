@@ -83,8 +83,11 @@ class TrainingIntegrationTests(unittest.TestCase):
                         torch.testing.assert_close(a[name][key], b[name][key], rtol=tolerance, atol=tolerance)
 
             outputs("full")
-            run(warmup)
+            run(warmup, "--save-every", "1")
             full_warm = load_checkpoint(root / "full/warmup.pt")
+            first_epoch = load_checkpoint(root / "full/warmup_epoch1.pt")
+            self.assertEqual(first_epoch['training_state']['completed'], 1)
+            equal_states(full_warm, load_checkpoint(root / "full/warmup_epoch2.pt"), ["encoder", "predictor"])
             # Verify reward uses live raw BCE, independently of frozen uncertainty.
             original_reward = rl_train.compute_paired_reward
             reward_inputs = []
@@ -100,7 +103,8 @@ class TrainingIntegrationTests(unittest.TestCase):
 
             outputs("resumed")
             cfg.train.warmup_epochs = 1
-            run(warmup)
+            run(warmup, "--save-every", "5")
+            equal_states(first_epoch, load_checkpoint(root / "resumed/warmup_epoch1.pt"), ["encoder", "predictor"])
             cfg.train.warmup_epochs = 2
             run(warmup, "--resume", str(root / "resumed/warmup.pt"))
             equal_states(full_warm, load_checkpoint(root / "resumed/warmup.pt"), ["encoder", "predictor"])
@@ -141,6 +145,17 @@ class TrainingIntegrationTests(unittest.TestCase):
             session = load_prediction_session(str(root / "resumed/best.pt"), cfg.data.processed_path,
                 cfg.knowledge.templates_jsonl, cfg.knowledge.entity_to_token_json,
                 cfg.data.split_json, device=cfg.train.device)
+            # No edit needs only one live encoding; both trace scores must agree.
+            for action, action_name in ((2, 'skip'), (1, 'hard_noop')):
+                session.reset()
+                with mock.patch.object(session.policy_net, 'act', return_value=(torch.tensor([action]), None, None)), \
+                        mock.patch('reta.learning.prediction.graft_hard_import', side_effect=lambda graph, _: graph), \
+                        mock.patch.object(session.encoder, 'forward', wraps=session.encoder.forward) as encode:
+                    unchanged, trace = session.predict_visit(trajectories['d'][0], trace=True)
+                self.assertEqual(trace['action'], action_name)
+                self.assertEqual(encode.call_count, 1)
+                torch.testing.assert_close(torch.tensor(trace['raw_probabilities']), torch.sigmoid(unchanged)[0])
+            session.reset()
             original_logits = []
             for visit in trajectories['d'][:-1]:
                 logits, _ = session.predict_visit(visit)

@@ -137,9 +137,12 @@ Set the paths and hyperparameters in [`configs/reta.yaml`](configs/reta.yaml).
 ### 1. Train
 
 ```bash
-python -m reta.learning.warmup --config configs/reta.yaml
+python -m reta.learning.warmup --config configs/reta.yaml --save-every 5
+python -m reta.learning.select_checkpoint --config configs/reta.yaml \
+  --checkpoints checkpoints/warmup_epoch*.pt --out checkpoints/warmup_best.pt \
+  --report results/warmup-selection.json
 python -m reta.learning.rl_train --config configs/reta.yaml \
-  --warmup_ckpt checkpoints/warmup.pt
+  --warmup_ckpt checkpoints/warmup_best.pt
 ```
 
 PyTorch and PyTorch Geometric provide the model, optimization, and graph batching.

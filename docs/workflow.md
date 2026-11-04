@@ -41,6 +41,17 @@ patient-disjoint training, validation, and test splits. Model selection and
 Micro-F1 threshold tuning use the validation split; test inference reuses the
 selected checkpoint and its saved threshold.
 
+Use `warmup --save-every 5` to retain periodic Stage 1 checkpoints, including the
+final epoch. Select these on validation before starting Stage 2; `warmup.pt`
+always retains the latest epoch for recovery. The default saves only this latest
+checkpoint. Use a new output directory for each experiment.
+
+For further experiments, freeze the patient split, compare the encoder, adaptive
+knowledge, linear history and optional blend across independent training seeds,
+and select settings on validation. Keep test evaluation for the fixed final
+comparison. An earlier test set used repeatedly during development should not
+be treated as an untouched final benchmark.
+
 ## Resume and independent seeds
 
 ```bash
@@ -79,4 +90,4 @@ checkpoint stores both branches; the table labels this variant **ReTA + linear
 history**. To continue graph training, resume its original graph-only checkpoint
 and then refit the head. The implementation follows the standard practice of
 [combining model predictions](https://scikit-learn.org/stable/modules/ensemble.html#voting-classifier),
-with a small validation-selected logit blend rather than an additional learned neural module.
+using a small validation-selected logit blend.

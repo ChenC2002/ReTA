@@ -341,7 +341,10 @@ def main():
                             action_counts["skip"] += 1
 
                 with torch.no_grad():
-                    _, loss_edit, h_G_aug = forward_logits_loss(encoder, predictor, g_aug, soft_vec, y_tokens, mem, train_mode=False)
+                    if effective_skip:
+                        loss_edit, h_G_aug = current_loss_raw, h_G_current_raw
+                    else:
+                        _, loss_edit, h_G_aug = forward_logits_loss(encoder, predictor, g_aug, soft_vec, y_tokens, mem, train_mode=False)
                     reward = compute_paired_reward(
                         current_loss_raw,
                         loss_edit,
