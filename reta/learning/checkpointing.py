@@ -73,7 +73,11 @@ def validate_resume(checkpoint, cfg, stage):
     new = asdict(cfg)
     for section in ("data", "knowledge", "model", "train"):
         a, b = dict(old[section]), dict(new[section])
+        if section == "knowledge":
+            a.setdefault("grounded_candidates_only", False)
         if section == "train":
+            a.setdefault("graph_batching", False)
+            a.setdefault("positive_weight_power", 0.0)
             for key in ("warmup_epochs", "rl_iters"):
                 a.pop(key, None)
                 b.pop(key, None)

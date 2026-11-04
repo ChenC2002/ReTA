@@ -904,3 +904,61 @@ footer {
     font-size: 13px
   }
 }
+
+/* Keep predictions in focus; reveal model internals on request. */
+.intro { margin-bottom: 28px; }
+.intro h1 { font-size: clamp(28px, 3.1vw, 43px); }
+.prediction-panel { margin-top: 0; }
+.prediction-heading { align-items: flex-start; margin-bottom: 14px; }
+.prediction-heading h2 { font-size: 22px; font-weight: 550; letter-spacing: -.6px; margin: 5px 0 0; }
+.editor-summary { list-style: none; display: flex; justify-content: space-between; align-items: center; cursor: pointer; gap: 10px; }
+.editor-summary::-webkit-details-marker { display: none; }
+.editor-summary strong { display: block; font-size: 16px; font-weight: 550; margin-top: 5px; }
+.edit-label { font-size: 11px; color: var(--accent); white-space: nowrap; }
+.editor-body { padding-top: 22px; }
+.input-caption { margin: 12px 0 18px; }
+.input-panel { position: sticky; top: 18px; }
+.observed-summary { color: var(--muted); font-size: 11px; line-height: 1.7; margin: 0 0 15px; }
+.observed-summary b { color: var(--ink); font-weight: 500; }
+.prediction-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.compare-label { display: flex; align-items: center; gap: 6px; white-space: nowrap; margin: 0; font-size: 10px; cursor: pointer; }
+.compare-label input { width: 13px; min-height: 13px; height: 13px; accent-color: var(--accent); margin: 0; }
+.prediction-row { padding: 12px 0; grid-template-columns: minmax(150px,1fr) 95px 100px; }
+.prediction-values strong { font-size: 12px; }
+.comparison-note { color: var(--muted); font-size: 10px; line-height: 1.7; margin: 12px 0 0; }
+.decision-strip { display: flex; gap: 11px; align-items: start; padding: 17px 18px; background: #e8f0e9; border-radius: 9px; margin-top: 16px; }
+.decision-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 5px; }
+#decision-summary { font-size: 12px; font-weight: 550; }
+#decision-detail { font-size: 11px; line-height: 1.7; color: #526c62; margin: 4px 0 0; }
+.explanation { margin-top: 16px; }
+.explanation>summary { cursor: pointer; list-style: none; color: var(--accent); display: flex; justify-content: space-between; font-size: 12px; padding: 6px 2px 14px; }
+.explanation>summary::-webkit-details-marker { display: none; }
+.explanation[open]>summary span { transform: rotate(45deg); }
+#graph svg circle { cursor: pointer; }
+#graph svg circle:focus { outline: none; stroke: var(--accent); stroke-width: 3; }
+#graph-selection { min-height: 28px; line-height: 1.6; }
+.candidate-definition { font-size: 10px; line-height: 1.6; color: var(--muted); margin-top: 6px; }
+.candidate-definition summary { cursor: pointer; color: var(--accent); }
+.candidate-definition p { margin: 5px 0 0; }
+#search-results button { text-align: left; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--ink); cursor: pointer; }
+#search-results button:hover { background: var(--mint); }
+@media(max-width:1050px) { .prediction-row { grid-template-columns: minmax(100px,1fr) 70px 92px; gap: 9px; } }
+@media(max-width:760px) {
+  main { padding-top: 22px; }
+  .intro { margin-bottom: 20px; }
+  .intro h1 { font-size: 30px; margin: 8px 0 10px; }
+  .input-panel { position: static; padding: 14px 17px; margin-bottom: 18px; }
+  .editor-summary strong { font-size: 14px; }
+  .prediction-panel { padding: 19px; }
+  .prediction-heading h2 { font-size: 20px; }
+  .prediction-heading { margin-bottom: 10px; }
+  .prediction-row { padding: 10px 0; }
+  .experiment { margin-top: 28px; }
+  .observed-summary { margin-bottom: 10px; }
+}
+@media(max-width:480px) {
+  .prediction-row { grid-template-columns: minmax(80px,1fr) 40px 88px; }
+  .prediction-toolbar { align-items: flex-start; }
+  .prediction-toolbar>.muted { max-width: 145px; line-height: 1.6; }
+  .prediction-heading .tag { display: none; }
+}

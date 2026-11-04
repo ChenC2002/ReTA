@@ -210,25 +210,29 @@ class StructureEncoder(nn.Module):
         if past_visit_memory is None:
             return h_intra
 
-        h_struct = torch.zeros_like(h_intra)
-        batch_size = int(batch.max().item()) + 1 if batch.numel() > 0 else 0
-        for graph_index in range(batch_size):
-            idx = (batch == graph_index).nonzero(as_tuple=False).view(-1)
-            if idx.numel() == 0:
-                continue
-            memory = past_visit_memory[graph_index] if graph_index < len(past_visit_memory) else None
-            if memory is None or memory.numel() == 0:
-                h_struct[idx] = h_intra[idx]
-                continue
-
-            memory = memory.to(h_intra.device)
-            query = self.W_T(h_intra[idx])
-            attention = torch.softmax(query @ memory.T, dim=1)
-            h_inter = attention @ memory
-            gate = torch.sigmoid(self.fuse_gate(torch.cat([h_intra[idx], h_inter], dim=1)))
-            h_struct[idx] = gate * h_intra[idx] + (1.0 - gate) * h_inter
-
-        return h_struct
+        # Pad only the short visit-memory axis; graph edges remain sparse.
+        from torch_geometric.utils import to_dense_batch
+        from torch.nn.utils.rnn import pad_sequence
+        batch_size = int(batch.max().item()) + 1 if batch.numel() else 0
+        memories = [past_visit_memory[i] if i < len(past_visit_memory) else None
+                    for i in range(batch_size)]
+        lengths = [0 if m is None else len(m) for m in memories]
+        if not any(lengths):
+            return h_intra
+        padded_memory = pad_sequence([
+            m.to(h_intra.device) if n else h_intra.new_zeros((1, self.dim))
+            for m, n in zip(memories, lengths)
+        ], batch_first=True)
+        query, node_mask = to_dense_batch(self.W_T(h_intra), batch, batch_size=batch_size)
+        scores = torch.bmm(query, padded_memory.transpose(1, 2))
+        length_tensor = torch.tensor(lengths, device=h_intra.device)
+        # A zero dummy for empty memories avoids an all-masked softmax.
+        valid = torch.arange(padded_memory.shape[1], device=h_intra.device)[None] < length_tensor.clamp_min(1)[:, None]
+        attention = torch.softmax(scores.masked_fill(~valid[:, None, :], float('-inf')), dim=-1)
+        h_inter = torch.bmm(attention, padded_memory)[node_mask]
+        gate = torch.sigmoid(self.fuse_gate(torch.cat([h_intra, h_inter], dim=1)))
+        fused = gate * h_intra + (1.0 - gate) * h_inter
+        return torch.where((length_tensor[batch] > 0)[:, None], fused, h_intra)
 
 
 class AdaptiveFusion(nn.Module):
@@ -330,18 +334,12 @@ class DecoupledMultiGATEncoder(nn.Module):
         """Prefer observed ICD nodes, falling back per graph for older data."""
         code_mask = code_mask.bool()
         orig_mask = orig_mask.bool()
-        out = code_mask.clone()
         batch_size = int(batch.max().item()) + 1 if batch.numel() > 0 else 0
-        for graph_index in range(batch_size):
-            idx = (batch == graph_index).nonzero(as_tuple=False).view(-1)
-            if idx.numel() == 0 or out[idx].any():
-                continue
-            fallback = orig_mask[idx]
-            if fallback.any():
-                out[idx] = fallback
-            else:
-                out[idx] = True
-        return out
+        counts = torch.zeros(batch_size, dtype=torch.long, device=batch.device)
+        code_counts = counts.scatter_add(0, batch, code_mask.long())
+        original_counts = counts.scatter_add(0, batch, orig_mask.long())
+        fallback = torch.where(original_counts[batch] > 0, orig_mask, torch.ones_like(orig_mask))
+        return torch.where(code_counts[batch] > 0, code_mask, fallback)
 
     def forward(
         self,

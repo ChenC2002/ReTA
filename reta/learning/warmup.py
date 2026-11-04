@@ -16,6 +16,8 @@ from reta.knowledge.pool import KnowledgePool
 from reta.knowledge.features import load_concept_features
 from .runtime import (
     EntityTokenMapper,
+    grounded_candidate_ids,
+    training_positive_weights,
     PoolAlignedTokenIndex,
     TrajectorySampler,
     build_checkpoint_contract,
@@ -40,6 +42,24 @@ from .model import (
 from .policy import HARD, SOFT, decode_action
 from .checkpointing import atomic_save, training_state, restore_rng, validate_resume
 from .runtime import load_checkpoint, require_checkpoint_contract, load_state_dict_strict
+
+
+def iter_visit_batches(sampler, patient_ids, batch_size):
+    """One current visit per patient in each batch; preserve causal order."""
+    pending = iter(patient_ids)
+    active = []
+    while True:
+        while len(active) < batch_size:
+            pid = next(pending, None)
+            if pid is None:
+                break
+            visits = [v for v in sampler.get_patient_traj(pid)[:-1] if v.get("label_ccs") is not None]
+            if visits:
+                active.append((pid, visits, 0))
+        if not active:
+            break
+        yield [(pid, visits[index]) for pid, visits, index in active]
+        active = [(pid, visits, index + 1) for pid, visits, index in active if index + 1 < len(visits)]
 
 
 def build_argparser() -> argparse.ArgumentParser:
@@ -72,6 +92,8 @@ def main():
     ccs_label_vocab_size = int(
         sampler.meta.get("ccs_label_vocab_size", ccs_vocab_size)
     )
+    positive_weights = training_positive_weights(sampler, icd_vocab_size, ccs_label_vocab_size,
+                                                 cfg.train.positive_weight_power, device)
     base_vocab_size = icd_vocab_size + ccs_vocab_size
     mapper = EntityTokenMapper.from_sources(
         sampler.vocab.get("name_to_token"),
@@ -85,6 +107,7 @@ def main():
     )
     contract = build_checkpoint_contract(
         mapper=mapper,
+        grounded_candidates_only=cfg.knowledge.grounded_candidates_only,
         processed_path=cfg.data.processed_path,
         templates_path=cfg.knowledge.templates_jsonl,
         split_json=cfg.data.split_json,
@@ -145,6 +168,7 @@ def main():
             query_tokens,
             code_embed_lookup,
             K=cfg.knowledge.retrieval_K,
+            candidate_ids=grounded_candidate_ids(pool, mapper, visit, cfg.knowledge.grounded_candidates_only),
         )
         K = len(ret.template_ids)
         if K == 0:
@@ -192,60 +216,88 @@ def main():
         patient_ids = list(sampler.patient_ids)
         random.shuffle(patient_ids)
 
-        for pid in patient_ids:
-            traj = sampler.get_patient_traj(pid)
-            if len(traj) < 2:
-                continue
-
-            past_visit_embs: List[torch.Tensor] = []
-            for t in range(len(traj) - 1):
-                visit = traj[t]
-                y_tokens = visit.get("label_ccs")
-                if y_tokens is None:
-                    continue
-
-                g_raw = build_visit_graph(visit).to(device)
-                g_aug, soft_vec = maybe_augment(visit, g_raw)
-                bg = batch_graphs([g_aug]).to(device)
-
-                mem = (
-                    torch.stack(past_visit_embs, dim=0)
-                    if past_visit_embs
-                    else torch.zeros((0, cfg.model.dim), device=device)
-                )
-                soft_offset = soft_vec.view(1, -1).to(device) if soft_vec is not None else None
-
-                h_G, _ = encoder(
-                    bg,
-                    past_visit_memory=[mem],
-                    soft_offset_per_graph=soft_offset,
-                    xi=cfg.train.soft_xi,
-                )
-                logits = predictor(h_G)
-
-                y = labels_to_multihot_from_ccs_tokens(
-                    y_tokens,
-                    num_ccs_labels=ccs_label_vocab_size,
-                    icd_vocab_size=icd_vocab_size,
-                    device=device,
-                ).view(1, -1)
-
-                loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, y)
+        if cfg.train.graph_batching:
+            memories = {}
+            for entries in iter_visit_batches(sampler, patient_ids, cfg.data.batch_size):
+                graphs, offsets, masks, targets, memory = [], [], [], [], []
+                for pid, visit in entries:
+                    graph, offset = maybe_augment(visit, build_visit_graph(visit))
+                    graphs.append(graph)
+                    offsets.append(torch.zeros(cfg.model.dim) if offset is None else offset)
+                    masks.append(offset is not None)
+                    history = memories.setdefault(pid, [])
+                    memory.append(torch.stack(history) if history else torch.zeros((0, cfg.model.dim), device=device))
+                    targets.append(labels_to_multihot_from_ccs_tokens(
+                        visit["label_ccs"], ccs_label_vocab_size, icd_vocab_size, device=device))
+                batch = batch_graphs(graphs).to(device)
+                h_G, _ = encoder(batch, past_visit_memory=memory,
+                                 soft_offset_per_graph=torch.stack(offsets).to(device),
+                                 soft_import_mask=torch.tensor(masks, dtype=torch.bool, device=device),
+                                 xi=cfg.train.soft_xi)
+                loss = torch.nn.functional.binary_cross_entropy_with_logits(predictor(h_G), torch.stack(targets), pos_weight=positive_weights)
                 if not torch.isfinite(loss):
                     raise RuntimeError("Non-finite warm-up loss; optimizer step aborted.")
-                (loss / update_every).backward()
-                accum += 1
-                past_visit_embs.append(h_G[0].detach())
+                loss.backward()
+                step_optimizer()
+                for i, (pid, _) in enumerate(entries):
+                    memories[pid].append(h_G[i].detach())
+                running += float(loss.item()) * len(entries)
+                steps += len(entries)
+        else:
+            for pid in patient_ids:
+                traj = sampler.get_patient_traj(pid)
+                if len(traj) < 2:
+                    continue
 
-                if accum >= update_every:
-                    step_optimizer()
-                    accum = 0
+                past_visit_embs: List[torch.Tensor] = []
+                for t in range(len(traj) - 1):
+                    visit = traj[t]
+                    y_tokens = visit.get("label_ccs")
+                    if y_tokens is None:
+                        continue
 
-                running += float(loss.item())
-                steps += 1
+                    g_raw = build_visit_graph(visit).to(device)
+                    g_aug, soft_vec = maybe_augment(visit, g_raw)
+                    bg = batch_graphs([g_aug]).to(device)
 
-        if accum > 0:
-            step_optimizer(gradient_scale=update_every / float(accum))
+                    mem = (
+                        torch.stack(past_visit_embs, dim=0)
+                        if past_visit_embs
+                        else torch.zeros((0, cfg.model.dim), device=device)
+                    )
+                    soft_offset = soft_vec.view(1, -1).to(device) if soft_vec is not None else None
+
+                    h_G, _ = encoder(
+                        bg,
+                        past_visit_memory=[mem],
+                        soft_offset_per_graph=soft_offset,
+                        xi=cfg.train.soft_xi,
+                    )
+                    logits = predictor(h_G)
+
+                    y = labels_to_multihot_from_ccs_tokens(
+                        y_tokens,
+                        num_ccs_labels=ccs_label_vocab_size,
+                        icd_vocab_size=icd_vocab_size,
+                        device=device,
+                    ).view(1, -1)
+
+                    loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, y, pos_weight=positive_weights)
+                    if not torch.isfinite(loss):
+                        raise RuntimeError("Non-finite warm-up loss; optimizer step aborted.")
+                    (loss / update_every).backward()
+                    accum += 1
+                    past_visit_embs.append(h_G[0].detach())
+
+                    if accum >= update_every:
+                        step_optimizer()
+                        accum = 0
+
+                    running += float(loss.item())
+                    steps += 1
+
+            if accum > 0:
+                step_optimizer(gradient_scale=update_every / float(accum))
 
         logger.info(
             f"epoch {epoch+1}/{cfg.train.warmup_epochs} "

@@ -12,6 +12,7 @@ import torch
 from reta.knowledge.pool import KnowledgePool
 from .runtime import (
     EntityTokenMapper,
+    grounded_candidate_ids,
     PoolAlignedTokenIndex,
     build_checkpoint_contract,
     encoder_code_embedding_lookup,
@@ -160,6 +161,7 @@ class PredictionSession:
                     query_tokens,
                     code_embed_lookup,
                     K=policy_K,
+                    candidate_ids=grounded_candidate_ids(pool, mapper, visit, bool(_config_value(self.cfg, "knowledge", "grounded_candidates_only", False))),
                     state_vector=retrieval_state,
                     alpha=retrieval_alpha,
                 )
@@ -309,6 +311,7 @@ def load_prediction_session(checkpoint_path, processed_path, templates_jsonl,
     aligned_index = PoolAlignedTokenIndex(pool, mapper)
     contract = build_checkpoint_contract(
         mapper=mapper,
+        grounded_candidates_only=bool(_config_value(cfg, "knowledge", "grounded_candidates_only", False)),
         processed_path=processed_path,
         templates_path=templates_jsonl,
         split_json=effective_split_json,

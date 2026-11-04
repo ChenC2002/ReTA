@@ -8,7 +8,7 @@ data:
   split_json: data/processed/splits.json
   train_split: train
 
-  # Stage 1 uses this many sequential transitions per optimizer step
+  # Number of independent patient graphs per Stage 1 batch
   batch_size: 32
 
 knowledge:
@@ -66,6 +66,7 @@ train:
   # -------------------------
   # Number of warm-up epochs
   warmup_epochs: 30
+  graph_batching: true
 
   # Bernoulli exposure probability for stochastic augmentation during warm-up
   exposure_prob: 0.3

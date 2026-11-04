@@ -14,6 +14,8 @@ import torch
 from reta.knowledge.pool import KnowledgePool
 from .runtime import (
     EntityTokenMapper,
+    grounded_candidate_ids,
+    training_positive_weights,
     PoolAlignedTokenIndex,
     TrajectorySampler,
     build_checkpoint_contract,
@@ -103,6 +105,8 @@ def main():
     ccs_label_vocab_size = int(
         sampler.meta.get("ccs_label_vocab_size", ccs_vocab_size)
     )
+    positive_weights = training_positive_weights(sampler, icd_vocab_size, ccs_label_vocab_size,
+                                                 cfg.train.positive_weight_power, device)
     base_vocab_size = icd_vocab_size + ccs_vocab_size
 
     pool = KnowledgePool.load_jsonl(cfg.knowledge.templates_jsonl)
@@ -118,6 +122,7 @@ def main():
     )
     contract = build_checkpoint_contract(
         mapper=mapper,
+        grounded_candidates_only=cfg.knowledge.grounded_candidates_only,
         processed_path=cfg.data.processed_path,
         templates_path=cfg.knowledge.templates_jsonl,
         split_json=cfg.data.split_json,
@@ -205,7 +210,7 @@ def main():
         soft_offset = soft_vec.view(1, -1).to(device) if soft_vec is not None else None
         h_G, _ = enc(bg, past_visit_memory=past_memory, soft_offset_per_graph=soft_offset, xi=cfg.train.soft_xi)
         logits = pred(h_G)
-        loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, labels(y_tokens))
+        loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, labels(y_tokens), pos_weight=positive_weights)
         return logits, loss, h_G
 
     start_iter = 0
@@ -287,6 +292,7 @@ def main():
                         query_tokens,
                         code_embed_lookup,
                         K=K,
+                        candidate_ids=grounded_candidate_ids(pool, mapper, visit, cfg.knowledge.grounded_candidates_only),
                         state_vector=retrieval_state,
                         alpha=cfg.knowledge.retrieval_alpha,
                     )
@@ -403,7 +409,7 @@ def main():
                 )
                 logits = predictor(h_G)
                 target = torch.cat([labels(tokens) for tokens in targets], dim=0)
-                loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, target)
+                loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, target, pos_weight=positive_weights)
                 if not torch.isfinite(loss):
                     raise RuntimeError("Non-finite refinement loss; optimizer step aborted.")
                 loss.backward()

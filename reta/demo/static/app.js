@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-let metadata, historyResult;
+let metadata, historyResult, activeVisit = 0;
 const percent = value => `${(value * 100).toFixed(1)}%`;
 
 function node(tag, text, className) {
@@ -18,6 +18,7 @@ async function request(url, options) {
 function setVisits(visits) {
   $('visits').replaceChildren();
   visits.forEach(codes => addVisit(codes));
+  $('history-title').textContent = 'Visit history';
 }
 
 function markDirty() {
@@ -27,6 +28,7 @@ function markDirty() {
   $('visit-tabs').replaceChildren();
   $('latency').textContent = 'Ready when you are';
   $('error').hidden = true;
+  $('history-title').textContent = 'Edited visit history';
 }
 
 function renumber() {
@@ -66,7 +68,7 @@ function drawGraph(graph) {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 320 180');
-  svg.setAttribute('role', 'img');
+  svg.setAttribute('role', 'group');
   svg.setAttribute('aria-label', `${graph.nodes.length} graph nodes and ${graph.edges.length} connections`);
   const positions = new Map();
   for (const [kind, radius] of [
@@ -107,29 +109,46 @@ function drawGraph(graph) {
     const title = document.createElementNS(NS, 'title');
     title.textContent = `${n.code}: ${n.name}`;
     circle.append(title);
+    circle.setAttribute('tabindex', '0');
+    circle.setAttribute('role', 'button');
+    circle.setAttribute('aria-label', `${n.code}: ${n.name}`);
+    const inspect = () => { $('graph-selection').textContent = `${n.name} · ${n.code}`; };
+    circle.onclick = inspect;
+    circle.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); inspect(); } };
     svg.append(circle);
   }
   $('graph').replaceChildren(svg);
-  $('graph-counts').textContent = `${graph.nodes.length} nodes · ${graph.edges.length} connections · hover to inspect`;
+  $('graph-counts').textContent = `${graph.nodes.length} nodes · ${graph.edges.length} connections · select a node to inspect`;
 }
 
 function renderVisit(index) {
+  activeVisit = index;
   const step = historyResult.steps[index];
+  $('prediction-context').textContent = `AFTER VISIT ${step.visit}`;
+  $('observed-summary').replaceChildren(node('b', 'Observed: '), document.createTextNode(step.codes.map(c => c.name).join(' · ')));
+  $('graph-selection').textContent = 'Select a node to inspect its concept.';
+  $('retrieval-description').textContent = metadata.grounded_candidates_only
+    ? 'Roots matched to observed visit concepts, then ranked by code similarity.'
+    : 'Ranked by code and history similarity.';
   [...$('visit-tabs').children].forEach((tab, i) => {
     tab.classList.toggle('active', i === index);
     tab.setAttribute('aria-selected', i === index);
+    tab.tabIndex = i === index ? 0 : -1;
   });
   $('retrieval-count').textContent = `${step.candidates.length} candidates`;
   $('candidates').replaceChildren();
   let shown = step.candidates.slice(0, 5);
   const selected = step.candidates.find(c => c.selected);
   if (selected && !shown.includes(selected)) shown = [...shown.slice(0, 4), selected];
-  if (!shown.length) $('candidates').append(node('p', 'This checkpoint uses the base encoder without a policy.', 'small muted'));
+  if (!shown.length) $('candidates').append(node('p', metadata.has_policy ? 'No grounded candidate for this visit. The policy can only Skip.' : 'This checkpoint uses the base encoder without a policy.', 'small muted'));
   for (const candidate of shown) {
     const rank = step.candidates.indexOf(candidate) + 1;
     const row = node('div', undefined, `candidate${candidate.selected ? ' selected' : ''}`);
     const body = node('div');
     body.append(node('div', candidate.name, 'candidate-name'), node('div', `${candidate.nodes} knowledge nodes${candidate.selected ? ' · selected' : ''}`, 'candidate-meta'));
+    const definition = node('details', undefined, 'candidate-definition');
+    definition.append(node('summary', 'View template'), node('p', candidate.definition));
+    body.append(definition);
     row.append(node('span', String(rank).padStart(2, '0'), 'rank'), body, node('span', candidate.score.toFixed(3), 'score'));
     $('candidates').append(row);
   }
@@ -143,6 +162,11 @@ function renderVisit(index) {
   $('action').textContent = title;
   $('action').className = `action ${step.action.startsWith('hard') ? 'hard' : step.action}`;
   $('action-description').textContent = description;
+  $('decision-summary').textContent = `${title}${selected ? ' · ' + selected.name : ''}`;
+  $('decision-detail').textContent = description;
+  const compare = $('compare').checked;
+  $('score-heading').textContent = compare ? 'BEFORE → AFTER IMPORT' : 'MODEL SCORE';
+  $('comparison-note').hidden = !compare;
   drawGraph(step.graph);
   $('predictions').replaceChildren();
   for (const item of step.predictions) {
@@ -154,8 +178,9 @@ function renderVisit(index) {
       before = node('div', undefined, 'bar-before');
     after.style.width = percent(item.probability);
     before.style.left = percent(item.before);
+    before.hidden = !compare;
     track.append(after, before);
-    const values = node('div', `${percent(item.before)} → `, 'prediction-values');
+    const values = node('div', compare ? `${percent(item.before)} → ` : '', 'prediction-values');
     values.append(node('strong', percent(item.probability)));
     row.append(name, track, values);
     $('predictions').append(row);
@@ -165,6 +190,7 @@ async function predict() {
   $('error').hidden = true;
   $('run').disabled = true;
   $('run').textContent = 'Running model…';
+  $('latency').textContent = 'Running model…';
   $('example').disabled = true;
   $('add-visit').disabled = true;
   $('visits').querySelectorAll('input,button').forEach(el => {
@@ -189,11 +215,24 @@ async function predict() {
       const button = node('button', `Visit ${i + 1}`, 'visit-tab');
       button.setAttribute('role', 'tab');
       button.onclick = () => renderVisit(i);
+      button.onkeydown = event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const count = historyResult.steps.length;
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? count - 1
+          : (i + (event.key === 'ArrowRight' ? 1 : -1) + count) % count;
+        renderVisit(next);
+        $('visit-tabs').children[next].focus();
+      };
       $('visit-tabs').append(button);
     });
     $('latency').textContent = `${historyResult.elapsed_ms} ms · ${historyResult.steps.length} visits`;
     renderVisit(historyResult.steps.length - 1);
+    $('history-title').textContent = `${historyResult.steps.length} completed visits · edit history`;
+    if (window.matchMedia('(max-width: 760px)').matches) $('history-editor').open = false;
   } catch (error) {
+    $('latency').textContent = 'Prediction unavailable';
+    $('history-editor').open = true;
     $('error').textContent = error.message;
     $('error').hidden = false;
   } finally {
@@ -224,7 +263,11 @@ function renderExperiment(results) {
 }
 $('add-visit').onclick = () => addVisit();
 $('run').onclick = predict;
-$('example').onchange = () => setVisits(metadata.examples[Number($('example').value)].visits);
+$('example').onchange = () => {
+  setVisits(metadata.examples[Number($('example').value)].visits);
+  predict();
+};
+$('compare').onchange = () => { if (historyResult) renderVisit(activeVisit); };
 let searchTimer, searchSequence = 0;
 $('search').oninput = () => {
   clearTimeout(searchTimer);
@@ -235,7 +278,17 @@ $('search').oninput = () => {
       if (sequence !== searchSequence) return;
       $('search-results').replaceChildren();
       for (const item of items) {
-        const row = node('div', undefined, 'search-item');
+        const row = node('button', undefined, 'search-item');
+        row.type = 'button';
+        row.title = 'Add to the last visit';
+        row.onclick = () => {
+          const input = [...$('visits').querySelectorAll('input')].at(-1);
+          if (!input || input.disabled) return;
+          const codes = input.value.split(/[,;\s]+/).filter(Boolean);
+          if (!codes.includes(item.code)) codes.push(item.code);
+          input.value = codes.join(', ');
+          markDirty();
+        };
         row.append(node('b', item.code), document.createTextNode(item.name));
         $('search-results').append(row);
       }
@@ -258,6 +311,7 @@ $('search').oninput = () => {
     $('connection').textContent = 'Model connected';
     $('connection').className = 'status live';
     renderExperiment(metadata.results);
+    await predict();
   } catch {
     $('connection').textContent = 'Model unavailable';
     $('error').textContent = 'The model service is unavailable. Check the server, then reload this page.';

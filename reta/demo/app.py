@@ -32,6 +32,7 @@ class PredictionRequest(BaseModel):
 class DemoModel:
     def __init__(self, config, checkpoint, icd2ccs, ccs_hierarchy, descriptions, device="cpu", results=None):
         cfg = load_config(config)
+        self.grounded_candidates_only = cfg.knowledge.grounded_candidates_only
         data = load_processed_data(cfg.data.processed_path)
         self.h_anc = int(data['meta'].get('h_anc', 2))
         self.session = load_prediction_session(
@@ -91,6 +92,7 @@ class DemoModel:
                     for candidate in trace["candidates"]:
                         template = self.session.pool.get_template(candidate["template_id"])
                         candidates.append({**candidate, "name": template.medoid.root_name,
+                                           "root": template.medoid.root_concept_id,
                                            "definition": template.medoid.definition,
                                            "nodes": len(template.medoid.subgraph_nodes),
                                            "selected": candidate["template_id"] == trace["template_id"]})
@@ -116,6 +118,7 @@ class DemoModel:
 
     def metadata(self):
         return {"version": "V1.0", "examples": EXAMPLES,
+                "grounded_candidates_only": self.grounded_candidates_only,
                 "templates": len(self.session.pool.templates), "labels": self.session.ccs_label_vocab_size,
                 "has_policy": self.session.policy_net is not None, "results": self.results}
 

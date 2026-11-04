@@ -454,6 +454,7 @@ class KnowledgePool:
         K: int = 20,
         state_vector: Optional[np.ndarray] = None,
         alpha: float = 0.3,
+        candidate_ids: Optional[Sequence[int]] = None,
     ) -> RetrievalResult:
         """Retrieve Top-K templates using code- and trajectory-level context."""
         np = _require_numpy()
@@ -461,6 +462,12 @@ class KnowledgePool:
             raise TypeError("K must be an integer")
         if K <= 0:
             return RetrievalResult([], [])
+        allowed = None if candidate_ids is None else set(candidate_ids)
+        if allowed is not None:
+            if not allowed <= set(self.id_to_index):
+                raise ValueError("candidate_ids contains an unknown template")
+            if not allowed:
+                return RetrievalResult([], [])
         alpha = float(alpha)
         if not math.isfinite(alpha) or not 0.0 <= alpha <= 1.0:
             raise ValueError("alpha must be finite and in [0, 1]")
@@ -469,13 +476,19 @@ class KnowledgePool:
 
         if len(visit_tokens) == 0:
             k = min(K, len(self.templates))
-            template_ids = sorted(int(t.template_id) for t in self.templates)[:k]
-            return RetrievalResult(template_ids, [0.0] * k)
+            template_ids = sorted(int(t.template_id) for t in self.templates
+                                  if allowed is None or t.template_id in allowed)[:k]
+            return RetrievalResult(template_ids, [0.0] * len(template_ids))
 
         dim = self.P.shape[1]
+        batch_lookup = getattr(code_embed_lookup, "batch_lookup", None)
+        embedded = (batch_lookup(visit_tokens) if batch_lookup is not None
+                    else [code_embed_lookup(int(tok)) for tok in visit_tokens])
+        if len(embedded) != len(visit_tokens):
+            raise ValueError("batched code embeddings must contain one row per token")
         vectors = []
-        for tok in visit_tokens:
-            vector = np.asarray(code_embed_lookup(int(tok)), dtype=np.float32)
+        for tok, raw_vector in zip(visit_tokens, embedded):
+            vector = np.asarray(raw_vector, dtype=np.float32)
             if vector.ndim != 1 or vector.size == 0 or not np.isfinite(vector).all():
                 raise ValueError(f"code embedding for token {tok} must be a finite, non-empty 1D vector")
             if int(vector.shape[0]) != dim:
@@ -503,7 +516,9 @@ class KnowledgePool:
         if not np.isfinite(scores).all():
             raise ValueError("retrieval produced non-finite scores")
         template_id_array = np.asarray([int(t.template_id) for t in self.templates], dtype=np.int64)
-        idx = np.lexsort((template_id_array, -scores))[:k]
+        eligible = np.asarray([i for i, t in enumerate(self.templates)
+                               if allowed is None or t.template_id in allowed], dtype=int)
+        idx = eligible[np.lexsort((template_id_array[eligible], -scores[eligible]))[:k]]
         template_ids = [self.templates[i].template_id for i in idx.tolist()]
         return RetrievalResult(template_ids=template_ids, scores=scores[idx].astype(float).tolist())
 

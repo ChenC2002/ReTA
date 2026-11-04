@@ -20,6 +20,7 @@ from reta.learning.runtime import Config, load_checkpoint, file_fingerprint, map
 
 class TrainingIntegrationTests(unittest.TestCase):
     use_text_features = False
+    graph_batching = False
     def test_two_stage_resume_and_inference(self):
         torch.set_num_threads(1)
         with tempfile.TemporaryDirectory() as tmp:
@@ -30,6 +31,9 @@ class TrainingIntegrationTests(unittest.TestCase):
             cfg.model.gnn_layers = 1
             cfg.model.dropout = 0.1
             cfg.data.batch_size = 3
+            cfg.train.positive_weight_power = 0.5 if self.graph_batching else 0.0
+            cfg.train.graph_batching = self.graph_batching
+            cfg.knowledge.grounded_candidates_only = self.graph_batching
             cfg.train.device = os.environ.get("RETA_TEST_DEVICE", "cpu")
             cfg.train.warmup_epochs = 2
             cfg.train.rl_iters = 2
@@ -165,6 +169,10 @@ class TrainingIntegrationTests(unittest.TestCase):
 
 class TextFeatureTrainingIntegrationTests(TrainingIntegrationTests):
     use_text_features = True
+
+
+class BatchedTrainingIntegrationTests(TextFeatureTrainingIntegrationTests):
+    graph_batching = True
 
 
 if __name__ == "__main__":
