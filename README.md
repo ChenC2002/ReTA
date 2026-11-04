@@ -228,12 +228,10 @@ Unselected checkpoints use threshold 0.5. Add `--max_patients 10` for a small ru
 
 ## Outputs
 
-The existing paper-result files are archived references from the previous
-manuscript, not outputs from this implementation or results for the latest PDF.
+The following files are generated when you run the pipeline.
 
 | Output                                       | Path                                                         |
 | -------------------------------------------- | ------------------------------------------------------------ |
-| Archived paper reference results                      | `results/paper_results.json`, `logs/paper_results.jsonl`     |
 | Distilled, grounded, and clustered knowledge | `data/knowledge/{artifacts,grounded,templates}.jsonl`        |
 | Filtering diagnostics                        | `results/filtering_audit.jsonl`, `results/filtering_summary.json` |
 | Frozen text features and pool projection | `data/knowledge/concept_features.pt`, `data/knowledge/templates.jsonl.projection.pt` |

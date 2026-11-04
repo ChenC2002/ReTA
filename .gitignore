@@ -38,10 +38,8 @@ data/processed/
 data/resources/
 data/knowledge/
 checkpoints/
-results/*
-!results/paper_results.json
-logs/*
-!logs/paper_results.jsonl
+results/
+logs/
 
 # Isolated multi-seed training outputs
 runs/
