@@ -57,8 +57,8 @@ train:
   device: auto
 
   # Optimizer
-  lr: 1e-4
-  weight_decay: 1e-5
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
   grad_clip: 0.5
 
   # -------------------------
@@ -89,7 +89,7 @@ train:
   encoder_updates_per_iter: 1
 
   # Policy optimization (REINFORCE)
-  policy_lr: 1e-5
+  policy_lr: 1.0e-5
   gamma: 0.95
   baseline_decay: 0.99
   policy_entropy_coef: 0.0

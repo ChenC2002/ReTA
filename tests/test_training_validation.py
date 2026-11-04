@@ -8,11 +8,18 @@ from unittest import mock
 import torch
 
 from reta.learning.checkpointing import validate_resume
-from reta.learning.runtime import Config, TrajectorySampler, validate_config
+from reta.learning.runtime import Config, TrajectorySampler, load_config, validate_config
 from reta.learning.select_checkpoint import select_checkpoint
 
 
 class TrainingValidationTests(unittest.TestCase):
+    def test_shipped_training_config_loads_with_numeric_learning_rates(self):
+        config = Path(__file__).resolve().parents[1] / 'configs' / 'reta.yaml'
+        cfg = load_config(str(config))
+        self.assertEqual(cfg.train.lr, 1e-4)
+        self.assertEqual(cfg.train.weight_decay, 1e-5)
+        self.assertEqual(cfg.train.policy_lr, 1e-5)
+
     def test_invalid_seed_is_rejected_before_numpy(self):
         for seed in (-1, 2**32):
             cfg = Config()
