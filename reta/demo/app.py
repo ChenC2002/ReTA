@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from reta.data.ontology import CCSOntology, normalize_icd_code
 from reta.learning.prediction import load_prediction_session
-from reta.learning.runtime import load_config, load_json_object_strict, load_processed_data
+from reta.learning.runtime import Config, load_config, load_json_object_strict, load_processed_data
 
 
 EXAMPLES = [
@@ -30,14 +30,17 @@ class PredictionRequest(BaseModel):
 
 
 class DemoModel:
-    def __init__(self, config, checkpoint, icd2ccs, ccs_hierarchy, descriptions, device="cpu", results=None):
-        cfg = load_config(config)
+    def __init__(self, config, checkpoint, icd2ccs, ccs_hierarchy, descriptions, device="cpu", results=None,
+                 vocabulary=None):
+        cfg = config if isinstance(config, Config) else load_config(config)
         self.grounded_candidates_only = cfg.knowledge.grounded_candidates_only
-        data = load_processed_data(cfg.data.processed_path)
+        data = (load_json_object_strict(vocabulary, "inference vocabulary") if vocabulary
+                else load_processed_data(cfg.data.processed_path))
         self.h_anc = int(data['meta'].get('h_anc', 2))
         self.session = load_prediction_session(
             checkpoint, cfg.data.processed_path, cfg.knowledge.templates_jsonl,
-            cfg.knowledge.entity_to_token_json, cfg.data.split_json, device=device, data=data,
+            cfg.knowledge.entity_to_token_json, None if vocabulary else cfg.data.split_json,
+            device=device, data=None if vocabulary else data, vocabulary_path=vocabulary,
         )
         self.ontology = CCSOntology.from_files(icd2ccs, ccs_hierarchy)
         if self.ontology.name_to_token != self.session.mapper.base_mapping:
@@ -117,7 +120,7 @@ class DemoModel:
                 "threshold": self.threshold}
 
     def metadata(self):
-        return {"version": "V1.0", "examples": EXAMPLES,
+        return {"version": "V2.0", "examples": EXAMPLES,
                 "grounded_candidates_only": self.grounded_candidates_only,
                 "templates": len(self.session.pool.templates), "labels": self.session.ccs_label_vocab_size,
                 "has_policy": self.session.policy_net is not None, "results": self.results}
@@ -130,7 +133,7 @@ def create_app(model_factory):
         yield
         del app.state.model
 
-    app = FastAPI(title="ReTA Demo", version="1.0", lifespan=lifespan)
+    app = FastAPI(title="ReTA Demo", version="2.0", lifespan=lifespan)
 
     @app.get("/api/meta")
     def metadata():

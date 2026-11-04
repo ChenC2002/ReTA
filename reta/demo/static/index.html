@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ReTA · Import what you need</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="/">ReTA<span>RESEARCH DEMO</span></a><div class="top-right"><span id="connection" class="status">Connecting</span><span class="version">V1.0</span></div></header>
+  <header class="topbar"><a class="brand" href="./">ReTA<span>RESEARCH DEMO</span></a><div class="top-right"><span id="connection" class="status">Connecting</span><span class="version">V2.0</span></div></header>
   <main>
-    <section class="intro"><div><div class="eyebrow">KNOWLEDGE, WHEN IT HELPS</div><h1>From history to what’s next.</h1><p>Explore how ReTA predicts diagnoses and chooses when to import knowledge.</p></div><div class="intro-note"><strong>One visit. One decision.</strong><p>Soft import · Hard import · Skip</p></div></section>
+    <section class="intro"><div><div class="eyebrow">KNOWLEDGE, WHEN IT HELPS</div><h1>From history to what’s next.</h1><p>Explore how ReTA predicts diagnoses and chooses when to import knowledge.</p></div><div class="intro-note"><strong>One visit. One decision.</strong><p>Soft import · Hard import · Skip</p><a href="https://github.com/ChenC2002/ReTA#quick-start">Run locally ↗</a></div></section>
     <div class="workspace">
       <aside class="panel input-panel">
         <details id="history-editor" open>
@@ -46,9 +46,9 @@
         </div>
       </section>
     </div>
-    <section id="experiment" class="experiment" hidden><div><div class="eyebrow">HELD-OUT EVALUATION</div><h2>MIMIC-III</h2><p id="experiment-context"></p></div><div class="table-wrap"><table><thead><tr><th scope="col">Model</th><th scope="col">Macro-AUPRC</th><th scope="col">Micro-AUPRC</th><th scope="col">Micro-F1</th><th scope="col">Acc@20</th></tr></thead><tbody id="metrics"></tbody></table><p class="small muted">Aggregate test results. The editable example above has no known next visit and is not an accuracy measurement.</p></div></section>
+    <section id="experiment" class="experiment" hidden><div><div class="eyebrow">HELD-OUT EVALUATION</div><h2>MIMIC-III</h2><p id="experiment-context"></p></div><div class="table-wrap"><table><thead><tr><th scope="col">Model</th><th scope="col">Macro-AUPRC</th><th scope="col">Micro-AUPRC</th><th scope="col">Micro-F1</th><th scope="col">Acc@20</th></tr></thead><tbody id="metrics"></tbody></table><p class="small muted">Aggregate test results. The example above has no known next visit and is not an accuracy measurement.</p></div></section>
     <footer><span>ReTA · Adaptive knowledge augmentation for longitudinal EHR graphs</span><span>Research use · No patient records shown</span></footer>
   </main>
-  <script src="/app.js" defer></script>
+  <script src="./app.js" defer></script>
 </body>
 </html>

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reta-healthcare"
-version = "1.0.0"
+version = "2.0.0"
 description = "Learning when and how to augment longitudinal EHR graphs with external knowledge"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
@@ -19,6 +19,10 @@ classifiers = [
   "Operating System :: OS Independent",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+
+[project.optional-dependencies]
+demo = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
+test = ["httpx>=0.27,<1"]
 
 [project.scripts]
 reta = "reta.cli:main"

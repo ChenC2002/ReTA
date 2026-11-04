@@ -46,7 +46,7 @@ class TextFeatureTests(unittest.TestCase):
     def test_cache_requires_complete_descriptions_and_matching_pool_and_vocabulary(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            pool_path = Path(__file__).resolve().parents[1] / "examples/tiny_templates.jsonl"
+            pool_path = Path(__file__).resolve().parents[1] / "tests/fixtures/tiny_templates.jsonl"
             pool = KnowledgePool.load_jsonl(str(pool_path))
             mapping = {"ICD:25000": 0, "CCS:49": 1}
             entities = {"UMLS:C0035309": 2, "UMLS:C0442874": 3}

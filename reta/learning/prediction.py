@@ -18,6 +18,7 @@ from .runtime import (
     encoder_code_embedding_lookup,
     fold_policy_state_for_retrieval,
     load_checkpoint,
+    load_json_object_strict,
     load_state_dict_strict,
     load_processed_data,
     require_checkpoint_contract,
@@ -244,9 +245,19 @@ class PredictionSession:
 
 def load_prediction_session(checkpoint_path, processed_path, templates_jsonl,
                             entity_to_token_json=None, split_json=None, device="auto",
-                            retrieval_K=None, soft_xi=None, seed=None, data=None):
+                            retrieval_K=None, soft_xi=None, seed=None, data=None,
+                            vocabulary_path=None):
     """Load once and validate the original training artifact fingerprints."""
-    if data is None:
+    if vocabulary_path is not None:
+        if data is not None or split_json is not None:
+            raise ValueError("Standalone vocabulary cannot be combined with patient data or splits.")
+        data = load_json_object_strict(vocabulary_path, "inference vocabulary")
+        if set(data) != {"meta", "vocab"}:
+            raise ValueError("Inference vocabulary must contain only meta and vocab.")
+        if not isinstance(data['meta'], dict) or not isinstance(data['vocab'], dict):
+            raise ValueError("Inference meta and vocab must be mappings.")
+        processed_path = vocabulary_path
+    elif data is None:
         data = load_processed_data(processed_path)
     meta = data["meta"]
     icd_vocab_size = int(meta["icd_vocab_size"])
@@ -293,7 +304,7 @@ def load_prediction_session(checkpoint_path, processed_path, templates_jsonl,
             None,
         )
     effective_split_json = split_json
-    if effective_split_json is None:
+    if effective_split_json is None and vocabulary_path is None:
         effective_split_json = _config_value(cfg, "data", "split_json", None)
     training_split = (
         str(_config_value(cfg, "data", "train_split", "train"))
@@ -334,7 +345,7 @@ def load_prediction_session(checkpoint_path, processed_path, templates_jsonl,
         soft_xi=float(_config_value(cfg, "train", "soft_xi", 0.5)),
         concept_features_sha256=ck.get("contract", {}).get("concept_features_sha256"),
     )
-    require_checkpoint_contract(ck, contract)
+    require_checkpoint_contract(ck, contract, vocabulary_only=vocabulary_path is not None)
 
     encoder = DecoupledMultiGATEncoder(
         vocab_size=mapper.vocab_size,

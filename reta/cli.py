@@ -6,45 +6,9 @@ import argparse
 import json
 from pathlib import Path
 import sys
-from dataclasses import asdict, dataclass
 from typing import Dict, List, Mapping, Optional, Sequence
 
 from reta.knowledge.pool import KnowledgeTemplate, load_templates_jsonl, validate_template_pool
-
-
-@dataclass
-class TrainingStage:
-    name: str
-    objective: str
-    inputs: List[str]
-    outputs: List[str]
-    metrics: List[str]
-
-
-def default_training_stages() -> List[TrainingStage]:
-    return [
-        TrainingStage(
-            name="stage1_encoder_warmup",
-            objective="Walk patient trajectories in order while training the decoupled encoder and predictor with Bernoulli exposure to stochastic Soft/Hard imports.",
-            inputs=["processed visit trajectories", "clustered knowledge templates"],
-            outputs=["checkpoints/warmup.pt", "logs/warmup.log"],
-            metrics=["mean BCE loss"],
-        ),
-        TrainingStage(
-            name="stage2_reinforce_policy_refinement",
-            objective="Optimize the Soft/Hard/Skip policy with paired rewards while continuing supervised encoder refinement.",
-            inputs=["checkpoints/warmup.pt", "processed visit trajectories", "clustered knowledge templates"],
-            outputs=["checkpoints/rl_iter*.pt", "logs/rl_train.log"],
-            metrics=[
-                "policy loss",
-                "policy entropy",
-                "mean return",
-                "running baseline",
-                "Soft/Hard/Skip action rates",
-                "supervised BCE loss",
-            ],
-        ),
-    ]
 
 
 def build_external_entity_mapping(
@@ -77,8 +41,13 @@ def build_external_entity_mapping(
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == 'demo':
+        from reta.demo.__main__ import main as demo_main
+        return demo_main(argv[1:])
     parser = argparse.ArgumentParser(prog="reta")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser('demo', help='Open the viewer or run a local model bundle')
 
     validate = subparsers.add_parser("validate-template-pool")
     validate.add_argument("--templates_jsonl", required=True)
@@ -99,7 +68,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     entity_map.add_argument("--templates_jsonl", required=True)
     entity_map.add_argument("--out", required=True)
 
-    subparsers.add_parser("show-training-stages")
 
     args = parser.parse_args(argv)
     if args.command == "validate-template-pool":
@@ -112,9 +80,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             args.templates_jsonl,
             args.out,
         )
-    if args.command == "show-training-stages":
-        print(json.dumps([asdict(stage) for stage in default_training_stages()], indent=2))
-        return 0
     return 1
 
 

@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 let metadata, historyResult, activeVisit = 0;
+const recorded = Boolean(window.RETA_DEMO);
 const percent = value => `${(value * 100).toFixed(1)}%`;
 
 function node(tag, text, className) {
@@ -9,6 +10,16 @@ function node(tag, text, className) {
   return el;
 }
 async function request(url, options) {
+  if (recorded) {
+    if (url === '/api/meta') return window.RETA_DEMO.metadata;
+    if (url === '/api/predict') {
+      const visits = JSON.parse(options.body).visits;
+      const index = window.RETA_DEMO.metadata.examples.findIndex(example => JSON.stringify(example.visits) === JSON.stringify(visits));
+      if (index < 0) throw new Error('Run the local model to predict an edited history.');
+      return window.RETA_DEMO.records[index];
+    }
+    throw new Error('This operation requires the local model.');
+  }
   const response = await fetch(url, options);
   const payload = await response.json();
   if (!response.ok) throw new Error(typeof payload.detail === 'string' ? payload.detail : 'Check the visit codes and try again.');
@@ -57,6 +68,8 @@ function addVisit(codes = []) {
   input.value = codes.join(', ');
   input.placeholder = '25000, 4019';
   input.autocomplete = 'off';
+  input.readOnly = recorded;
+  remove.hidden = recorded;
   input.oninput = markDirty;
   wrapper.append(label, input);
   $('visits').append(wrapper);
@@ -226,9 +239,9 @@ async function predict() {
       };
       $('visit-tabs').append(button);
     });
-    $('latency').textContent = `${historyResult.elapsed_ms} ms · ${historyResult.steps.length} visits`;
+    $('latency').textContent = `${recorded ? 'Recorded model run' : historyResult.elapsed_ms + ' ms'} · ${historyResult.steps.length} visits`;
     renderVisit(historyResult.steps.length - 1);
-    $('history-title').textContent = `${historyResult.steps.length} completed visits · edit history`;
+    $('history-title').textContent = `${historyResult.steps.length} completed visits${recorded ? '' : ' · edit history'}`;
     if (window.matchMedia('(max-width: 760px)').matches) $('history-editor').open = false;
   } catch (error) {
     $('latency').textContent = 'Prediction unavailable';
@@ -301,6 +314,15 @@ $('search').oninput = () => {
 (async () => {
   try {
     metadata = await request('/api/meta');
+    if (recorded) {
+      $('add-visit').hidden = true;
+      $('run').hidden = true;
+      document.querySelector('.lookup').hidden = true;
+      document.querySelector('.edit-label').textContent = 'View ↗';
+      document.querySelector('.input-caption').textContent = 'Select an example to explore its recorded model predictions. Download the model package to edit inputs and run new predictions.';
+      document.querySelector('.input-footer').textContent = 'Recorded model inference · example inputs';
+      document.querySelector('.tag').textContent = 'Recorded inference';
+    }
     metadata.examples.forEach((example, index) => {
       const option = node('option', example.name);
       option.value = index;
@@ -309,7 +331,7 @@ $('search').oninput = () => {
     setVisits(metadata.examples[0].visits);
     $('example').disabled = false;
     $('run').disabled = false;
-    $('connection').textContent = 'Model connected';
+    $('connection').textContent = recorded ? 'Example explorer' : 'Model connected';
     $('connection').className = 'status live';
     renderExperiment(metadata.results);
     await predict();

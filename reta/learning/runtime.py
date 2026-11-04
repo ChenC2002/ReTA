@@ -469,6 +469,8 @@ def training_positive_weights(sampler, icd_vocab_size, num_labels, power=0.0, de
 def require_checkpoint_contract(
     checkpoint: Mapping[str, Any],
     current_contract: Mapping[str, Any],
+    *,
+    vocabulary_only: bool = False,
 ) -> None:
     """Reject legacy, incomplete, or data-incompatible checkpoints."""
 
@@ -483,10 +485,14 @@ def require_checkpoint_contract(
     unexpected = sorted(set(stored) - set(current_contract))
     if unexpected:
         raise ValueError("checkpoint contract has unknown fields: " + ", ".join(unexpected))
+    # Standalone prediction validates the public vocabulary, pool and complete
+    # architecture. Training/evaluation still require the exact private cohort.
+    ignored = {"processed_sha256", "split_manifest_sha256", "training_split",
+               "training_split_sha256"} if vocabulary_only else set()
     mismatches = [
         f"{key}: checkpoint={stored[key]!r}, current={current_contract[key]!r}"
         for key in current_contract
-        if stored[key] != current_contract[key]
+        if key not in ignored and stored[key] != current_contract[key]
     ]
     if mismatches:
         raise ValueError("checkpoint contract mismatch: " + "; ".join(mismatches))

@@ -33,7 +33,7 @@ class GroundedBatchingTests(unittest.TestCase):
         self.assertIsNone(training_positive_weights(sampler, 5, 2))
 
     def test_filter_never_uses_targets_or_falls_back_to_unrelated_knowledge(self):
-        pool = KnowledgePool.load_jsonl(str(Path(__file__).resolve().parents[1] / 'examples/tiny_templates.jsonl'))
+        pool = KnowledgePool.load_jsonl(str(Path(__file__).resolve().parents[1] / 'tests/fixtures/tiny_templates.jsonl'))
         mapper = SimpleNamespace(base_mapping={'CCS:49': 1}, external_mapping={})
         self.assertEqual(grounded_candidate_ids(pool, mapper, {'node_ids':[1]}, True), [0])
         ids = grounded_candidate_ids(pool, mapper, {'node_ids':[2], 'label_ccs':[1]}, True)

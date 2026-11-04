@@ -38,7 +38,7 @@ class EmbeddingBackendTests(unittest.TestCase):
             from reta.knowledge.pool import KnowledgePool
             from reta.learning.runtime import EntityTokenMapper
             from reta.learning.model import ConceptEmbedding
-            source = Path(__file__).resolve().parents[1] / "examples/tiny_templates.jsonl"
+            source = Path(__file__).resolve().parents[1] / "tests/fixtures/tiny_templates.jsonl"
             grounded = [KnowledgePool.load_jsonl(str(source)).templates[0].medoid]
             templates = cluster_templates(grounded, model_name=str(path), model_revision="local-test",
                                           projection_dim=4, projection_path=str(path / "projection.pt"))

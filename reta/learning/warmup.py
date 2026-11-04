@@ -219,6 +219,9 @@ def main():
         if cfg.train.graph_batching:
             memories = {}
             for entries in iter_visit_batches(sampler, patient_ids, cfg.data.batch_size):
+                # Finished trajectories never re-enter the active window.
+                # Release their tensors instead of retaining a whole epoch.
+                memories = {pid: memories.get(pid, []) for pid, _ in entries}
                 graphs, offsets, masks, targets, memory = [], [], [], [], []
                 for pid, visit in entries:
                     graph, offset = maybe_augment(visit, build_visit_graph(visit))

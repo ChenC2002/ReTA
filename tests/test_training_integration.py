@@ -40,7 +40,7 @@ class TrainingIntegrationTests(unittest.TestCase):
             cfg.train.rollout_patients = 2
             cfg.train.encoder_updates_per_iter = 1
             cfg.knowledge.retrieval_K = 1
-            cfg.knowledge.templates_jsonl = str(Path(__file__).resolve().parents[1] / "examples/tiny_templates.jsonl")
+            cfg.knowledge.templates_jsonl = str(Path(__file__).resolve().parents[1] / "tests/fixtures/tiny_templates.jsonl")
             cfg.knowledge.entity_to_token_json = str(root / "entities.json")
             (root / "entities.json").write_text(json.dumps({"UMLS:C0035309": 3, "UMLS:C0442874": 4}))
             cfg.data.processed_path = str(root / "processed.pt")
@@ -170,6 +170,27 @@ class TrainingIntegrationTests(unittest.TestCase):
                     "test", device=cfg.train.device)
                 self.assertEqual(result["metrics"], report["metrics"])
                 self.assertEqual(result["meta"]["retrieval_space"], "clinicalbert_shared_projection_v1")
+
+            # A released predictor must work after private data/splits are removed,
+            # while preserving vocabulary and knowledge-contract validation.
+            public = {'meta': {'icd_vocab_size': 1, 'ccs_vocab_size': 2, 'ccs_label_vocab_size': 2},
+                      'vocab': {'name_to_token': {'ICD:25000': 0, 'CCS:49': 1, 'CCS:50': 2}}}
+            vocabulary = root/'vocabulary.json'
+            vocabulary.write_text(json.dumps(public))
+            Path(cfg.data.processed_path).unlink()
+            Path(cfg.data.split_json).unlink()
+            portable = load_prediction_session(str(root/'resumed/best.pt'), None,
+                cfg.knowledge.templates_jsonl, cfg.knowledge.entity_to_token_json,
+                device=cfg.train.device, vocabulary_path=str(vocabulary))
+            for index, visit in enumerate(trajectories['d'][:-1]):
+                logits, _ = portable.predict_visit(visit)
+                torch.testing.assert_close(logits, original_logits[index])
+            public['vocab']['name_to_token'] = {'ICD:25001': 0, 'CCS:49': 1, 'CCS:50': 2}
+            vocabulary.write_text(json.dumps(public))
+            with self.assertRaisesRegex(ValueError, 'contract mismatch'):
+                load_prediction_session(str(root/'resumed/best.pt'), None,
+                    cfg.knowledge.templates_jsonl, cfg.knowledge.entity_to_token_json,
+                    device=cfg.train.device, vocabulary_path=str(vocabulary))
 
 
 class TextFeatureTrainingIntegrationTests(TrainingIntegrationTests):

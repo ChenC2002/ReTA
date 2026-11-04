@@ -17,7 +17,7 @@ jobs:
             profile: requirements.txt
           - python: '3.13'
             torch: '2.13.0'
-            profile: requirements-cuda.txt
+            profile: requirements-modern.txt
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,7 +25,7 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
       - run: python -m pip install torch==${{ matrix.torch }} --index-url https://download.pytorch.org/whl/cpu
-      - run: python -m pip install -r ${{ matrix.profile }} -e . build
+      - run: python -m pip install -r ${{ matrix.profile }} -e ".[demo,test]" build
       - run: python -m pip check
       - run: python -m unittest discover -s tests -p 'test*.py'
         env:

@@ -14,7 +14,6 @@ HAS_TORCH = importlib.util.find_spec("torch") is not None
 
 from reta.cli import (
     build_external_entity_mapping,
-    default_training_stages,
     main as reta_cli_main,
 )
 from reta.knowledge.pool import load_templates_jsonl, validate_template_pool
@@ -22,7 +21,7 @@ from reta.knowledge.pool import load_templates_jsonl, validate_template_pool
 
 class SmokeTests(unittest.TestCase):
     def test_template_pool_cli(self) -> None:
-        templates_path = ROOT / "examples" / "tiny_templates.jsonl"
+        templates_path = ROOT / "tests" / "fixtures" / "tiny_templates.jsonl"
         templates = load_templates_jsonl(str(templates_path))
         self.assertEqual(validate_template_pool(templates, expected_dim=4), [])
 
@@ -40,7 +39,7 @@ class SmokeTests(unittest.TestCase):
         )
 
     def test_external_entity_mapping_is_complete_and_deterministic(self) -> None:
-        templates = load_templates_jsonl(str(ROOT / "examples" / "tiny_templates.jsonl"))
+        templates = load_templates_jsonl(str(ROOT / "tests" / "fixtures" / "tiny_templates.jsonl"))
         mapping = build_external_entity_mapping(
             templates,
             {"ICD:25000": 0, "CCS:49": 1},
@@ -51,25 +50,6 @@ class SmokeTests(unittest.TestCase):
                 "UMLS:C0035309": 2,
                 "UMLS:C0442874": 3,
             },
-        )
-
-    def test_training_stage_contract(self) -> None:
-        stages = default_training_stages()
-        self.assertEqual(
-            [stage.name for stage in stages],
-            ["stage1_encoder_warmup", "stage2_reinforce_policy_refinement"],
-        )
-        self.assertEqual(stages[0].metrics, ["mean BCE loss"])
-        self.assertEqual(
-            stages[1].metrics,
-            [
-                "policy loss",
-                "policy entropy",
-                "mean return",
-                "running baseline",
-                "Soft/Hard/Skip action rates",
-                "supervised BCE loss",
-            ],
         )
 
     @unittest.skipUnless(HAS_TORCH, "PyTorch is not installed in the dependency-light test environment")

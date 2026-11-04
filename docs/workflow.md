@@ -1,6 +1,6 @@
 # Core implementation notes
 
-The [README](../README.md) contains the input tables and end-to-end commands.
+The [preparation guide](pipeline.md) contains the complete input tables and commands.
 The implementation covers visit-level knowledge augmentation and next-visit
 diagnosis prediction.
 
