@@ -1,9 +1,8 @@
 # Core implementation notes
 
 The [README](../README.md) contains the input tables and end-to-end commands.
-The implementation covers the next-visit diagnosis framework; it does not add
-appendix ablations, clinical audits, binary-outcome pipelines, or cross-dataset
-experiment runners.
+The implementation covers visit-level knowledge augmentation and next-visit
+diagnosis prediction.
 
 ## Model and retrieval
 
@@ -12,29 +11,26 @@ experiment runners.
   Its initialization uses the projection fitted to external template centroids.
 - Retrieval evaluates Eq. 1 exactly over the small template matrix. Stage 2 uses
   a GRU history/current state with fixed `W_ret = [I/2, I/2]`; Stage 1 uses
-  code-only retrieval before a policy state encoder is trained. These are explicit
-  simplifications of the basic framework, not a learned retrieval objective.
+  code-only retrieval before a policy state encoder is trained.
 - Soft Import adds the projected template offset to observed code features;
   Hard Import grafts connected template structure; Skip leaves the input alone.
   PyG handles GAT layers and graph batching; PyTorch handles attention and GRUs.
 - REINFORCE uses discounted returns minus the previous running-mean baseline.
   Stage 2 alternates policy updates with supervised encoder updates. Encoder
-  outputs and past-visit memories are detached during policy rollouts; gradients
-  do not pass through discrete retrieval or across the full patient trajectory.
+  outputs and past-visit memories are detached during policy rollouts. Each
+  update follows the active policy or supervised loss.
 
 `model.concept_features_path: null` retains lookup embeddings for example
 fixtures and older checkpoints. The supplied training config enables text
-features. Cached features are embedded in new checkpoints, so inference does
-not need the original feature-cache file. Old lookup checkpoints remain readable
-but must be retrained to use the new text representation and policy update.
+features. Inference restores cached features directly from the checkpoint.
+To use text representations, train with `model.concept_features_path` configured.
 
 ## Visits and evaluation
 
-Use `--visit_id_col` for admission-level visits. The generic preprocessor emits
-patient-disjoint splits; it does **not** reproduce the latest paper's
-admission-level discharge-time split protocol. Full cohort reproduction requires
-the original data and split artifacts. The selected Micro-F1 threshold is fitted
-only on validation patients and stored with the selected checkpoint.
+Use `--visit_id_col` to group diagnoses by admission. Preprocessing writes
+patient-disjoint training, validation, and test splits. Model selection and
+Micro-F1 threshold tuning use the validation split; test inference reuses the
+selected checkpoint and its saved threshold.
 
 ## Resume and independent seeds
 

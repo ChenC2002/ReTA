@@ -48,8 +48,8 @@ python examples/run_toy.py
 
 This runs warm-up → policy training → validation selection → test inference
 on example trajectories and cached features. Outputs go to `runs/toy`;
-no model download is needed. Its scores are **not clinical results**. Use
-`--out runs/toy-2` for a new run.
+no model download is needed. The example scores illustrate the training and
+evaluation workflow. Use `--out runs/toy-2` for a new run.
 
 ```bash
 python -m unittest discover -s tests -p 'test*.py'
@@ -113,7 +113,7 @@ Without `--visit_id_col`, legacy event data uses 24-hour windows.
 ### Step 2: Build the Pool
 
 Generate one concept-level response per row using the [prompt and schema](reta/knowledge/releases/pool_v1).
-The following command validates supplied responses; it does not call an LLM.
+The following command validates the supplied responses saved in JSONL format.
 
 ```bash
 python -m reta.knowledge.distill \
