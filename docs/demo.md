@@ -7,6 +7,10 @@ shows example predictions and optional knowledge details; the Experiment view
 contains aggregate held-out metrics. New inputs use the local
 model, while the online viewer displays recorded inference.
 
+To recompute the complete Experiment table from authorized MIMIC-III data, use
+the [reproduction workflow](reproduce.md). The bundle's `--verify` command below
+replays the three illustrative histories only.
+
 The released demo uses **ReTA with diagnosis-history fusion**. The combination
 is selected on validation and supplies both the final scores and the before/after
 import comparison. The history head uses only observed visits;

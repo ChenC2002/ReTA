@@ -1,0 +1,38 @@
+{
+  "cohort_sha256": "a3f75681db3ee48e62386850f879d115e19f402d4a60d16695a8b58928cd8a01",
+  "concept_features_sha256": "d890f371095a08c57b98370ee28665dc8ee89f0b787fbce3f63f69a5fde4ca13",
+  "patients": 7494,
+  "splits": {
+    "test": {
+      "patients": 1499,
+      "transitions": 2518
+    },
+    "train": {
+      "patients": 5246,
+      "transitions": 8712
+    },
+    "val": {
+      "patients": 749,
+      "transitions": 1177
+    }
+  },
+  "warmup_epochs": [
+    10,
+    20,
+    30,
+    45,
+    60
+  ],
+  "policy_iterations": [
+    5,
+    10,
+    15,
+    20,
+    25,
+    30
+  ],
+  "selected_epoch": 45,
+  "selected_iteration": 30,
+  "seed": 42,
+  "checkpoint_sha256": "a1c806b41266faf5390bb7055b1e88578f15f5a7999d97804a98235b607cd930"
+}

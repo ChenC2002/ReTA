@@ -25,12 +25,17 @@ demo also accepts edited inputs.
 | [Offline viewer](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-offline.zip) | 17.7 KB | Open `index.html`; includes all three recorded examples and evaluation |
 | [Complete demo model](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-demo-model.zip) | 139.2 MB | Both prediction branches, knowledge resources, configuration, and reference predictions |
 | [Core ReTA model](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-core-model.zip) | 129.5 MB | Original graph model and import policy, with the same portable resources |
+| [Experiment training resources](https://github.com/ChenC2002/ReTA/releases/download/V2.0/reta-experiment-resources.zip) | 45.5 MB | Frozen concept features and initial projection for training from scratch |
 | [SHA-256 checksums](https://github.com/ChenC2002/ReTA/releases/download/V2.0/SHA256SUMS) | <1 KB | Verify the downloaded archives |
 
 The demo uses **ReTA with diagnosis-history fusion**. The core ReTA model is
 also available separately. Both packages include complete checkpoints and cached
 concept features, with no patient records.
 [View the experiment](https://chenc2002.github.io/ReTA/demo/#experiment) for evaluation details.
+
+To recompute **all five experiment rows** with authorized MIMIC-III data, follow
+the [reproduction guide](docs/reproduce.md). It includes cohort preparation,
+checkpoint evaluation, and training from scratch.
 
 <details>
 <summary>Run locally (Python 3.10–3.13)</summary>

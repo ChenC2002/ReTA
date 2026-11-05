@@ -1,0 +1,43 @@
+# Released demo configuration; the train command resolves resource paths.
+data:
+  batch_size: 32
+  processed_path: runs/mimiciii/processed/processed.pt
+  split_json: runs/mimiciii/processed/splits.json
+  train_split: train
+knowledge:
+  entity_to_token_json: reta-demo-model/entities.json
+  grounded_candidates_only: true
+  retrieval_K: 20
+  retrieval_alpha: 0.0
+  templates_jsonl: reta-demo-model/templates.jsonl
+model:
+  attn_heads: 4
+  concept_features_path: reta-experiment-resources/concept_features.pt
+  dim: 256
+  dropout: 0.3
+  gnn_layers: 2
+outputs:
+  checkpoints_dir: runs/mimiciii/training/checkpoints
+  logs_dir: runs/mimiciii/training/logs
+train:
+  baseline_decay: 0.99
+  device: auto
+  encoder_updates_per_iter: 1
+  exposure_prob: 0.3
+  gamma: 0.95
+  grad_clip: 0.5
+  graph_batching: true
+  lr: 0.0001
+  max_visits_per_patient: 20
+  policy_entropy_coef: 0.0
+  policy_lr: 1.0e-05
+  positive_weight_power: 0.5
+  reward_lambda1: 1.0
+  reward_lambda2: 0.1
+  rl_iters: 30
+  rollout_patients: 64
+  seed: 42
+  soft_xi: 0.5
+  utility_decay: 0.95
+  warmup_epochs: 60
+  weight_decay: 1.0e-05

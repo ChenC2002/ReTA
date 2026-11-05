@@ -53,8 +53,8 @@ def export_bundle(config, checkpoint, icd2ccs, ccs_hierarchy, descriptions, resu
     return manifest
 
 
-def load_bundle(directory, device='cpu'):
-    from .app import DemoModel
+def validate_bundle(directory):
+    """Verify every portable resource before inference or experiment preparation."""
     root = Path(directory).resolve()
     manifest = json.loads((root/'manifest.json').read_text(encoding='utf-8'))
     if manifest.get('format_version') != 1 or set(manifest.get('files', {})) != FILES:
@@ -63,6 +63,12 @@ def load_bundle(directory, device='cpu'):
         path = root/name
         if path.stat().st_size != expected['bytes'] or file_fingerprint(path) != expected['sha256']:
             raise ValueError(f'Demo bundle checksum mismatch: {name}')
+    return root
+
+
+def load_bundle(directory, device='cpu'):
+    from .app import DemoModel
+    root = validate_bundle(directory)
     cfg = load_config(root/'config.yaml')
     cfg.knowledge.templates_jsonl = str(root/'templates.jsonl')
     cfg.knowledge.entity_to_token_json = str(root/'entities.json')

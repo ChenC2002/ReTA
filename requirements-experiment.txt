@@ -1,0 +1,11 @@
+# Original demo experiment environment (Python 3.13.5).
+# Install torch 2.6.0 with the appropriate official CUDA/CPU wheel first.
+torch==2.6.0
+torch-geometric==2.7.0
+numpy==2.2.6
+pandas==2.2.3
+scikit-learn==1.6.1
+scipy==1.18.1
+transformers==4.51.3
+pyyaml==6.0.3
+loguru==0.7.3
