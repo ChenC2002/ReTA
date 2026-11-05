@@ -178,7 +178,7 @@ class TrainingIntegrationTests(unittest.TestCase):
                     session.predict_visit(trajectories['d'][0])
             session.reset()
             if self.graph_batching:
-                from scripts import fit_history_head
+                from reta.learning import fit_history_head
                 from reta.learning.checkpointing import atomic_save
                 head_path = root/'history.pt'
                 arguments = ['fit_history_head', '--config', str(root/'config.yaml'),

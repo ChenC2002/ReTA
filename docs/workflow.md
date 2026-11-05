@@ -80,7 +80,7 @@ global logit-blending weight and the F1 threshold are selected on validation.
 The graph encoder and import policy retain their existing weights.
 
 ```bash
-python scripts/fit_history_head.py --config configs/reta.yaml \
+python -m reta.learning.fit_history_head --config configs/reta.yaml \
   --checkpoint checkpoints/best.pt --out checkpoints/demo.pt \
   --report results/demo-selection.json
 ```

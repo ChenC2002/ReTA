@@ -272,8 +272,7 @@ def train(args):
                     '--warmup_ckpt', str(selected)], check=True)
     select_checkpoint([destination/f'checkpoints/rl_iter{i}.pt' for i in (5, 10, 15, 20, 25, 30)],
                       config, destination/'stage2.pt', destination/'stage2-selection.json')
-    script = Path(args.history_script).resolve()
-    subprocess.run([sys.executable, str(script), '--config', str(path), '--checkpoint', str(destination/'stage2.pt'),
+    subprocess.run([sys.executable, '-m', 'reta.learning.fit_history_head', '--config', str(path), '--checkpoint', str(destination/'stage2.pt'),
                     '--out', str(destination/'demo.pt'), '--report', str(destination/'history-selection.json'),
                     '--device', args.device, '--C', '0.1'], check=True)
     print(f'Training complete: {destination / "demo.pt"}', flush=True)
@@ -298,7 +297,6 @@ def main(argv=None):
         if name == 'train':
             p.add_argument('--features', required=True)
             p.add_argument('--config', default='configs/demo_mimiciii.yaml')
-            p.add_argument('--history-script', default='scripts/fit_history_head.py')
     args = parser.parse_args(argv)
     os.umask(0o077)
     torch.set_num_threads(2)

@@ -35,3 +35,5 @@ jobs:
       - run: python -m pip install --no-deps --force-reinstall dist/*.whl
       - name: Verify packaged pool resources outside the checkout
         run: cd /tmp && reta validate-pool-release
+      - name: Verify packaged training entry point outside the checkout
+        run: cd /tmp && python -m reta.learning.fit_history_head --help
