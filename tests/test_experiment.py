@@ -1,13 +1,17 @@
 """Experiment cohort identity, admission selection and independent prediction branches."""
 import copy
+import json
+from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 import torch
 
-from reta.experiments.mimiciii import cohort_events, cohort_fingerprint, check_cohort, experiment_predictions
+from reta.experiments.mimiciii import cohort_events, cohort_fingerprint, check_cohort, experiment_predictions, evaluate
 from reta.learning.history import LinearHistoryHead
 
 
@@ -42,6 +46,24 @@ class ExperimentTests(unittest.TestCase):
         splits['val'] = ['a']
         with self.assertRaisesRegex(ValueError, 'disjoint'):
             check_cohort(data, splits, {})
+
+    def test_evaluation_rejects_checkpoint_trained_on_held_out_patients(self):
+        data, splits = self.data()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root/'processed').mkdir()
+            (root/'processed/splits.json').write_text(json.dumps(splits))
+            args = SimpleNamespace(run=tmp, out=None, checkpoint='new-model.pt', device='cpu')
+            reference = {'cohort_sha256': cohort_fingerprint(data, splits)}
+            with patch('reta.experiments.mimiciii.experiment_bundle', return_value=(root, reference)), \
+                 patch('reta.experiments.mimiciii.load_processed_data', return_value=data), \
+                 patch('reta.experiments.mimiciii.load_prediction_session',
+                       return_value=SimpleNamespace(ck={'contract': {'training_split': 'all'}})), \
+                 patch('reta.experiments.mimiciii.experiment_predictions') as predict:
+                with self.assertRaisesRegex(ValueError, 'train split only'):
+                    evaluate(args)
+                predict.assert_not_called()
+            self.assertFalse((root/'retrained-evaluation').exists())
 
     def test_admission_cohort_keeps_whole_histories_excludes_overlap(self):
         admissions = pd.DataFrame([

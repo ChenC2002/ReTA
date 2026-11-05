@@ -198,6 +198,8 @@ def evaluate(args):
         graph = load_prediction_session(str(bundle/'checkpoint.pt'), None,
             str(bundle/'templates.jsonl'), str(bundle/'entities.json'), device=args.device,
             vocabulary_path=str(bundle/'vocabulary.json'))
+    if graph.ck['contract'].get('training_split') != 'train':
+        raise ValueError('Held-out evaluation requires a checkpoint fitted on the train split only.')
     if not hasattr(graph.predictor, 'history_head'):
         raise ValueError('Use the complete demo checkpoint including its history head.')
     encoder = encoder_session(graph)
